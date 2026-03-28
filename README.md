@@ -10,6 +10,16 @@ Minimal FastAPI backend for:
 
 ```text
 app/
+├── bookkeeping_app/
+│   ├── api.py
+│   ├── config.py
+│   ├── metrics.py
+│   ├── openai_service.py
+│   ├── parsers.py
+│   └── prompts.py
+├── tests/
+│   ├── test_api.py
+│   └── test_parsers.py
 ├── main.py
 ├── requirements.txt
 ├── .env.example
@@ -70,6 +80,12 @@ uvicorn main:app --reload
 ```
 
 The API will run at `http://127.0.0.1:8000`.
+
+## Run Tests
+
+```bash
+pytest
+```
 
 ## Endpoints
 
@@ -167,6 +183,13 @@ curl -X POST "http://127.0.0.1:8000/recategorize-transactions-csv" \
 
 - The app returns JSON only.
 - If the uploaded file is invalid, the API returns an error.
-- If the OpenAI request fails, the API returns a `502` error.
+- If OpenAI quota or rate limits are exceeded, the API returns `429`.
+- Other upstream OpenAI failures return `502`.
 - CSV uploads are parsed directly and do not call the OpenAI API.
 - AI category review for CSV uploads does call the OpenAI API.
+
+## Next Steps
+
+- Manual override context: keep a recent set of transactions where you manually fixed categories, then pass a limited sample of those examples into the category review prompt.
+- Token control: send only the fields needed for categorization, cap the number of context examples, and batch transactions into smaller review requests when needed.
+- Category consistency: move toward a fixed category list so the model does not drift into new category names.

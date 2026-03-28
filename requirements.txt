@@ -1,5 +1,6 @@
 fastapi
 openai
+pytest
 python-dotenv
 python-multipart
 uvicorn[standard]
