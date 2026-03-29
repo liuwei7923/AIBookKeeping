@@ -15,6 +15,7 @@ This is not a fine-tuning project yet. The current design is:
 - local memory from trusted historical labels
 - retrieval of relevant prior examples
 - OpenAI used only when needed to improve categorization
+- local JSON storage for categorization memory
 
 ## High-Level Design
 
@@ -56,6 +57,10 @@ Important design rules:
 - `original_category` is optional because historical data may not include it
 - memory should come from trusted labeled history or explicit manual overrides
 - not every AI suggestion should automatically become memory
+
+The repository now includes the first version of this storage as:
+
+- `data/categorization_memory.json`
 
 ## Category Reference
 
@@ -225,6 +230,7 @@ The repository already includes:
 - CSV parsing
 - recategorization with OpenAI
 - request logging
+- local categorization memory schema and JSON storage foundation
 - tests for parser and API behavior
 
 The memory import and retrieval APIs are the next major build steps.
