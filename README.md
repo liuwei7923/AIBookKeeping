@@ -1,73 +1,204 @@
 # AI Bookkeeping App MVP
 
-Minimal FastAPI backend for:
+CSV-first FastAPI backend for improving transaction categories using your own historical labeling decisions.
 
-- extracting transactions from an uploaded image using the OpenAI API
-- importing transactions from CSV
-- reviewing CSV categories with AI
+## Product Goal
 
-## File Structure
+The app is built around one core idea:
 
-```text
-app/
-├── bookkeeping_app/
-│   ├── api.py
-│   ├── config.py
-│   ├── metrics.py
-│   ├── openai_service.py
-│   ├── parsers.py
-│   └── prompts.py
-├── tests/
-│   ├── test_api.py
-│   └── test_parsers.py
-├── main.py
-├── requirements.txt
-├── .env.example
-└── README.md
+1. import your historically labeled transactions
+2. store them as local categorization memory
+3. use that memory to help label future transaction CSVs
+
+This is not a fine-tuning project yet. The current design is:
+
+- local memory from trusted historical labels
+- retrieval of relevant prior examples
+- OpenAI used only when needed to improve categorization
+
+## High-Level Design
+
+The app has three user-facing workflows:
+
+1. Import categorization memory
+   Upload a labeled historical CSV and store trusted category examples locally.
+
+2. Inspect categorization memory
+   Retrieve the stored memory in a human-readable format so you can verify what the system knows.
+
+3. Recategorize future transactions
+   Upload a new CSV, retrieve relevant historical examples, and return suggested categories for the new transactions.
+
+The long-term intent is:
+
+- use exact or strong merchant matches as cheap, rule-like memory
+- use OpenAI only when memory alone is not enough
+- keep token usage low by sending only the most relevant examples
+
+## Categorization Memory
+
+Categorization memory is the local knowledge base for this app.
+
+Each memory item represents a trusted historical labeling example, such as:
+
+```json
+{
+  "merchant": "Electrify America",
+  "amount": -7.0,
+  "corrected_category": "Electric Vehicle Charging",
+  "notes": "EV charging merchant"
+}
 ```
 
-## What It Does
+Important design rules:
 
-Send a bank or credit card screenshot to the API and receive a JSON array like this:
+- `corrected_category` is the important label
+- `original_category` is optional because historical data may not include it
+- memory should come from trusted labeled history or explicit manual overrides
+- not every AI suggestion should automatically become memory
+
+## Category Reference
+
+The app will also maintain a dedicated category reference file so categories stay consistent over time.
+
+That reference should define:
+
+- canonical category names
+- category definitions
+- aliases
+- simple merchant patterns
+- example merchants
+
+This prevents drift like:
+
+- `Transportation`
+- `Auto & Transport`
+- `Taxi & Ride Shares`
+
+when they should be handled consistently.
+
+## API Design
+
+### `GET /health`
+
+Basic health check.
+
+### `POST /categorization-memory/import`
+
+Upload a labeled historical CSV and import it into local categorization memory.
+
+Expected CSV shape:
+
+- required:
+  - `merchant`
+  - `amount`
+  - `category`
+- optional:
+  - `date`
+  - `original_category`
+  - `notes`
+
+Expected response:
+
+```json
+{
+  "imported": 120,
+  "skipped": 3
+}
+```
+
+This endpoint should not call OpenAI.
+
+### `GET /categorization-memory`
+
+Return stored categorization memory in a human-readable JSON format.
+
+Example response:
 
 ```json
 [
   {
-    "date": "2026-03-01",
-    "amount": -12.5,
-    "merchant": "Starbucks",
-    "category": null
+    "merchant": "Electrify America",
+    "original_category": null,
+    "corrected_category": "Electric Vehicle Charging",
+    "notes": "EV charging merchant"
   }
 ]
 ```
 
-You can also upload a CSV file and either:
+This endpoint should not call OpenAI.
 
-- import transactions directly
-- ask AI to review and correct the categories
+### `POST /recategorize-transactions-csv`
+
+Upload a new transaction CSV and return category suggestions for future transactions.
+
+Expected input CSV fields:
+
+- `merchant`
+- `amount`
+- optional `date`
+- optional `category`
+
+Expected response:
+
+```json
+[
+  {
+    "date": "2026-03-24",
+    "amount": -7.0,
+    "merchant": "Electrify America",
+    "original_category": "Gas",
+    "suggested_category": "Electric Vehicle Charging",
+    "reason": "Matches prior trusted labeling for the same merchant."
+  }
+]
+```
+
+This endpoint may call OpenAI, but only after retrieving a limited relevant subset of memory.
+
+## User Workflow
+
+A typical workflow should look like this:
+
+1. Import historical labeled CSV data into categorization memory.
+2. Inspect the stored memory to verify it looks correct.
+3. Upload a new transaction CSV.
+4. Receive corrected or improved suggested categories.
+
+## Cost Control Strategy
+
+The app should keep OpenAI usage low by default.
+
+Planned controls:
+
+- do not use OpenAI for memory import
+- do not use OpenAI for memory retrieval
+- retrieve only the top relevant memory examples
+- cap context size
+- prefer direct memory matches before calling the model
 
 ## Setup
 
-1. Create and activate a virtual environment:
+Create and activate a virtual environment:
 
 ```fish
 python3 -m venv .venv
 source .venv/bin/activate.fish
 ```
 
-2. Install dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Create your environment file:
+Create your environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-4. Add your OpenAI API key to `.env`:
+Add your OpenAI API key to `.env`:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
@@ -79,7 +210,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 uvicorn main:app --reload
 ```
 
-The API will run at `http://127.0.0.1:8000`.
+The API runs at `http://127.0.0.1:8000`.
 
 ## Run Tests
 
@@ -87,109 +218,13 @@ The API will run at `http://127.0.0.1:8000`.
 pytest
 ```
 
-## Endpoints
+## Current Status
 
-### `GET /health`
+The repository already includes:
 
-Quick health check.
+- CSV parsing
+- recategorization with OpenAI
+- request logging
+- tests for parser and API behavior
 
-### `POST /extract-transactions`
-
-Accepts an image upload with `multipart/form-data`.
-
-Supported file types:
-
-- JPEG
-- PNG
-- WEBP
-
-### `POST /extract-transactions-csv`
-
-Accepts a CSV upload with `multipart/form-data`.
-
-The CSV should include a header row. Common column names are supported, including:
-
-- `date`
-- `transaction date`
-- `amount`
-- `merchant`
-- `description`
-- `payee`
-- `category`
-
-Returns the same JSON schema as the image endpoint:
-
-```json
-[
-  {
-    "date": "2026-03-01",
-    "amount": -12.5,
-    "merchant": "Starbucks",
-    "category": "Coffee"
-  }
-]
-```
-
-### `POST /recategorize-transactions-csv`
-
-Accepts the same CSV upload, then sends the parsed transactions to OpenAI to review the existing categories.
-
-Returns:
-
-```json
-[
-  {
-    "date": "2026-03-01",
-    "amount": -12.5,
-    "merchant": "Starbucks",
-    "original_category": "Shopping",
-    "suggested_category": "Coffee",
-    "reason": "Starbucks is typically a food and beverage purchase."
-  }
-]
-```
-
-## Sample cURL Request
-
-Replace `sample.png` with your image file:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/extract-transactions" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@sample.png"
-```
-
-### CSV Upload Example
-
-Replace `transactions.csv` with your CSV file:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/extract-transactions-csv" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@transactions.csv"
-```
-
-### AI Category Review Example
-
-```bash
-curl -X POST "http://127.0.0.1:8000/recategorize-transactions-csv" \
-  -H "accept: application/json" \
-  -F "file=@transactions.csv"
-```
-
-## Notes
-
-- The app returns JSON only.
-- If the uploaded file is invalid, the API returns an error.
-- If OpenAI quota or rate limits are exceeded, the API returns `429`.
-- Other upstream OpenAI failures return `502`.
-- CSV uploads are parsed directly and do not call the OpenAI API.
-- AI category review for CSV uploads does call the OpenAI API.
-
-## Next Steps
-
-- Manual override context: keep a recent set of transactions where you manually fixed categories, then pass a limited sample of those examples into the category review prompt.
-- Token control: send only the fields needed for categorization, cap the number of context examples, and batch transactions into smaller review requests when needed.
-- Category consistency: move toward a fixed category list so the model does not drift into new category names.
+The memory import and retrieval APIs are the next major build steps.
