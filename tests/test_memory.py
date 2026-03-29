@@ -26,11 +26,13 @@ def test_build_memory_item_supports_optional_original_category() -> None:
         merchant="Electrify America",
         amount="-7.00",
         corrected_category="Electric Vehicle Charging",
+        statement="ELECTRIFY AMERICA 65RESTON VA",
         notes="EV charging merchant",
     )
 
     assert item.original_category is None
     assert item.corrected_category == "Electric Vehicle Charging"
+    assert item.statement == "ELECTRIFY AMERICA 65RESTON VA"
     assert item.normalized_merchant == "electrify america"
     assert item.direction == "expense"
 
@@ -54,12 +56,16 @@ def test_load_and_save_categorization_memory_round_trip(tmp_path: Path) -> None:
 
 
 def test_parse_memory_csv_supports_final_category_only() -> None:
-    csv_text = "merchant,amount,category\nElectrify America,-7.0,Electric Vehicle Charging\n"
+    csv_text = (
+        "merchant,amount,category,original statement\n"
+        "Electrify America,-7.0,Electric Vehicle Charging,ELECTRIFY AMERICA 65RESTON VA\n"
+    )
 
     items = parse_memory_csv(csv_text)
 
     assert len(items) == 1
     assert items[0].merchant == "Electrify America"
+    assert items[0].statement == "ELECTRIFY AMERICA 65RESTON VA"
     assert items[0].corrected_category == "Electric Vehicle Charging"
     assert items[0].original_category is None
 
@@ -74,3 +80,16 @@ def test_import_categorization_memory_csv_appends_to_store(tmp_path: Path) -> No
     assert result == {"imported": 1, "skipped": 0}
     assert len(loaded) == 1
     assert loaded[0].merchant == "Whole Foods"
+
+
+def test_parse_memory_csv_accepts_corrected_category_column() -> None:
+    csv_text = (
+        "merchant,amount,corrected_category,statement\n"
+        "Whole Foods,-42.19,Groceries,WHOLEFDS SAN JOSE\n"
+    )
+
+    items = parse_memory_csv(csv_text)
+
+    assert len(items) == 1
+    assert items[0].corrected_category == "Groceries"
+    assert items[0].statement == "WHOLEFDS SAN JOSE"

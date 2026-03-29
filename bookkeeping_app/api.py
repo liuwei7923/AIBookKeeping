@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from bookkeeping_app.config import ALLOWED_IMAGE_CONTENT_TYPES, CATEGORIZATION_MEMORY_PATH
 from bookkeeping_app.memory import import_categorization_memory_csv, load_categorization_memory
+from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.metrics import metrics
 from bookkeeping_app.openai_service import (
     extract_transactions_from_image,
@@ -34,7 +35,7 @@ def openai_usage() -> dict[str, int | str]:
 @app.get("/categorization-memory")
 def get_categorization_memory() -> list[dict[str, object]]:
     items = load_categorization_memory(MEMORY_PATH)
-    return [item.model_dump(mode="json") for item in items]
+    return [serialize_memory_item(item) for item in items]
 
 
 @app.post("/categorization-memory/import")
@@ -63,6 +64,19 @@ async def import_categorization_memory(file: UploadFile = File(...)) -> JSONResp
         result["skipped"],
     )
     return JSONResponse(content=result)
+
+
+def serialize_memory_item(item: CategorizationMemoryItem) -> dict[str, object]:
+    return {
+        "date": item.date,
+        "merchant": item.merchant,
+        "statement": item.statement,
+        "amount": item.amount,
+        "direction": item.direction,
+        "original_category": item.original_category,
+        "category": item.corrected_category,
+        "notes": item.notes,
+    }
 
 
 @app.post("/extract-transactions")

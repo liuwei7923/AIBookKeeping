@@ -16,6 +16,7 @@ class CategorizationMemoryItem(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     date: str | None = None
     merchant: str
+    statement: str | None = None
     normalized_merchant: str
     amount: float | None = None
     direction: str | None = None

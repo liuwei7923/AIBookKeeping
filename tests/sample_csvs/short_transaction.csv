@@ -1,0 +1,15 @@
+date,merchant,original statement,amount,category,notes
+2026-03-01,Navia Benefit Solutions,NAVIA BENEFIT SOLUTIONS,250.00,Other Income,HSA reimbursement
+2026-03-02,Whole Foods,WHOLEFDS SAN JOSE,-42.19,Groceries,Trusted historical label
+2026-03-03,Electrify America,ELECTRIFY AMERICA 65RESTON VA,-7.00,Electric Vehicle Charging,EV charging merchant
+2026-03-04,Starbucks,STARBUCKS STORE 1234,-12.50,Coffee,Recurring coffee purchase
+2026-03-05,PG&E,PACIFIC GAS AND ELECTRIC,-91.12,Utilities,Monthly electric bill
+2026-03-06,Chevron,CHEVRON 009123,-54.33,Gas,Fuel purchase
+2026-03-07,Costco,COSTCO WHSE #0123,-186.42,Groceries,Bulk household shopping
+2026-03-08,Lyft,LYFT *RIDE SUN 8PM,-18.75,Rideshare,Airport trip
+2026-03-09,Netflix,NETFLIX.COM,-15.49,Entertainment,Monthly streaming subscription
+2026-03-10,Amazon,AMZN MKTP US*AB12C,-63.84,Shopping,Household supplies
+2026-03-11,Target,TARGET 00012345,-28.11,Shopping,Home essentials
+2026-03-12,Trader Joe's,TRADER JOES #123,-57.90,Groceries,Weekly groceries
+2026-03-13,Shell,SHELL SERVICE STATION,-49.27,Gas,Road trip fuel
+2026-03-14,Apple,APPLE.COM/BILL,-2.99,Software,Cloud storage subscription

@@ -47,16 +47,18 @@ Each memory item represents a trusted historical labeling example, such as:
 ```json
 {
   "merchant": "Electrify America",
+  "statement": "ELECTRIFY AMERICA 65RESTON VA",
   "amount": -7.0,
-  "corrected_category": "Electric Vehicle Charging",
+  "category": "Electric Vehicle Charging",
   "notes": "EV charging merchant"
 }
 ```
 
 Important design rules:
 
-- `corrected_category` is the important label
+- `category` is the human-readable output label returned by the API
 - `original_category` is optional because historical data may not include it
+- `statement` can preserve the raw bank statement description when available
 - memory should come from trusted labeled history or explicit manual overrides
 - not every AI suggestion should automatically become memory
 
@@ -102,6 +104,7 @@ Expected CSV shape:
   - `category`
 - optional:
   - `date`
+  - `statement` or `original statement`
   - `original_category`
   - `notes`
 
@@ -125,9 +128,13 @@ Example response:
 ```json
 [
   {
+    "date": "2026-03-24",
     "merchant": "Electrify America",
+    "statement": "ELECTRIFY AMERICA 65RESTON VA",
+    "amount": -7.0,
+    "direction": "expense",
     "original_category": null,
-    "corrected_category": "Electric Vehicle Charging",
+    "category": "Electric Vehicle Charging",
     "notes": "EV charging merchant"
   }
 ]

@@ -37,6 +37,7 @@ def build_memory_item(
     corrected_category: str,
     amount: float | str | None = None,
     date: str | None = None,
+    statement: str | None = None,
     original_category: str | None = None,
     notes: str | None = None,
     source: str = "imported_labeled_history",
@@ -56,6 +57,7 @@ def build_memory_item(
     return CategorizationMemoryItem(
         date=sanitize_text(date),
         merchant=cleaned_merchant,
+        statement=sanitize_text(statement),
         normalized_merchant=normalized_merchant,
         amount=normalized_amount,
         direction=infer_direction(normalized_amount),
@@ -72,7 +74,7 @@ def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
         raise ValueError("CSV file must include a header row")
 
     # TODO: Consider mapping currently ignored CSV fields such as Account,
-    # Original Statement, Tags, and Owner into the memory schema once we
+    # Tags, and Owner into the memory schema once we
     # define how they should influence retrieval, merchant normalization,
     # and category decisions.
     items: list[CategorizationMemoryItem] = []
@@ -92,6 +94,7 @@ def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
                 corrected_category=category,
                 amount=find_memory_csv_value(row, ["amount", "transaction amount", "value"]),
                 date=find_memory_csv_value(row, ["date", "transaction date", "posted date"]),
+                statement=find_memory_csv_value(row, ["original statement", "statement"]),
                 original_category=find_memory_csv_value(row, ["original_category"]),
                 notes=find_memory_csv_value(row, ["notes"]),
             )

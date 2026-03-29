@@ -59,7 +59,7 @@ def running_server(tmp_path: Path):
 
 
 def test_memory_endpoints_over_live_server(running_server: str) -> None:
-    csv_path = Path("/Users/w_liu/Downloads/short_transaction.csv")
+    csv_path = Path(__file__).resolve().parent / "sample_csvs" / "short_transaction.csv"
     assert csv_path.exists(), "Expected sample CSV fixture to exist"
 
     with csv_path.open("rb") as file_handle:
@@ -78,4 +78,6 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
     memory_items = memory_response.json()
     assert len(memory_items) == 14
     assert memory_items[0]["merchant"] == "Navia Benefit Solutions"
-    assert memory_items[0]["corrected_category"] == "Other Income"
+    assert memory_items[0]["statement"] == "NAVIA BENEFIT SOLUTIONS"
+    assert memory_items[0]["category"] == "Other Income"
+    assert "normalized_merchant" not in memory_items[0]
