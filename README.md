@@ -2,6 +2,8 @@
 
 CSV-first FastAPI backend for improving transaction categories using your own historical labeling decisions.
 
+Project workflow rules live in [AGENTS.md](/Users/w_liu/FiniancialMind/app/AGENTS.md) and the detailed process is documented in [docs/development-lifecycle.md](/Users/w_liu/FiniancialMind/app/docs/development-lifecycle.md).
+
 ## Product Goal
 
 The app is built around one core idea:
@@ -231,6 +233,11 @@ The repository already includes:
 - recategorization with OpenAI
 - request logging
 - local categorization memory schema and JSON storage foundation
-- tests for parser and API behavior
+- categorization memory import and retrieval APIs
+- parser, API, and live integration tests
 
-The memory import and retrieval APIs are the next major build steps.
+The next major build steps are:
+
+- memory-aware recategorization using relevant prior examples
+- dedicated category reference definitions and patterns
+- token-budget controls for memory-aware prompts
