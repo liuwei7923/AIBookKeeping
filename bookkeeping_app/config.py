@@ -1,3 +1,5 @@
+"""Central configuration values and file paths used across the application."""
+
 from pathlib import Path
 
 ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}

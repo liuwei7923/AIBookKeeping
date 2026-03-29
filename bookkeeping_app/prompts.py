@@ -1,3 +1,5 @@
+"""Prompt templates used for extraction and transaction recategorization."""
+
 SYSTEM_PROMPT = """You are a financial assistant.
 Extract transactions from images into structured JSON.
 Return ONLY valid JSON. No explanation.

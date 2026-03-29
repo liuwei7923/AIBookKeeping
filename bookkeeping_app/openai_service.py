@@ -1,3 +1,5 @@
+"""OpenAI request helpers for extraction and memory-aware category review flows."""
+
 import base64
 import json
 import logging

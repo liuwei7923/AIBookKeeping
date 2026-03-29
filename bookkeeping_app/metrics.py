@@ -1,3 +1,5 @@
+"""Simple in-memory request metrics and logging helpers for OpenAI usage."""
+
 import logging
 
 from bookkeeping_app.config import MODEL_NAME

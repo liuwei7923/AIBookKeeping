@@ -1,3 +1,5 @@
+"""Pydantic schema definitions for persisted categorization memory items."""
+
 from datetime import UTC, datetime
 from uuid import uuid4
 

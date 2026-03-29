@@ -1,3 +1,5 @@
+"""FastAPI routes for health checks, CSV handling, and AI-backed categorization."""
+
 import logging
 
 from fastapi import FastAPI, File, HTTPException, UploadFile

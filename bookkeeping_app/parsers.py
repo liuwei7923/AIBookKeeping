@@ -1,3 +1,5 @@
+"""Parsing and normalization utilities for CSV input and model JSON output."""
+
 import csv
 import json
 import re

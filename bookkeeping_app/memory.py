@@ -1,3 +1,5 @@
+"""Helpers for normalizing, constructing, loading, and saving categorization memory."""
+
 import json
 import re
 from pathlib import Path
@@ -25,8 +27,6 @@ def infer_direction(amount: float | None) -> str | None:
     if amount is None:
         return None
     return "income" if amount >= 0 else "expense"
-
-
 
 def build_memory_item(
     *,
