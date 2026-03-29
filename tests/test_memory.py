@@ -3,8 +3,10 @@ from pathlib import Path
 from bookkeeping_app.memory import (
     build_memory_item,
     infer_direction,
+    import_categorization_memory_csv,
     load_categorization_memory,
     normalize_merchant,
+    parse_memory_csv,
     save_categorization_memory,
 )
 
@@ -49,3 +51,26 @@ def test_load_and_save_categorization_memory_round_trip(tmp_path: Path) -> None:
     assert loaded[0].merchant == "Whole Foods"
     assert loaded[0].corrected_category == "Groceries"
     assert loaded[0].original_category is None
+
+
+def test_parse_memory_csv_supports_final_category_only() -> None:
+    csv_text = "merchant,amount,category\nElectrify America,-7.0,Electric Vehicle Charging\n"
+
+    items = parse_memory_csv(csv_text)
+
+    assert len(items) == 1
+    assert items[0].merchant == "Electrify America"
+    assert items[0].corrected_category == "Electric Vehicle Charging"
+    assert items[0].original_category is None
+
+
+def test_import_categorization_memory_csv_appends_to_store(tmp_path: Path) -> None:
+    memory_path = tmp_path / "categorization_memory.json"
+    csv_text = "merchant,amount,category\nWhole Foods,-42.19,Groceries\n"
+
+    result = import_categorization_memory_csv(csv_text, memory_path)
+    loaded = load_categorization_memory(memory_path)
+
+    assert result == {"imported": 1, "skipped": 0}
+    assert len(loaded) == 1
+    assert loaded[0].merchant == "Whole Foods"

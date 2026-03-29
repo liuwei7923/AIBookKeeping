@@ -1,11 +1,13 @@
 """FastAPI routes for health checks, CSV handling, and AI-backed categorization."""
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from bookkeeping_app.config import ALLOWED_IMAGE_CONTENT_TYPES
+from bookkeeping_app.config import ALLOWED_IMAGE_CONTENT_TYPES, CATEGORIZATION_MEMORY_PATH
+from bookkeeping_app.memory import import_categorization_memory_csv, load_categorization_memory
 from bookkeeping_app.metrics import metrics
 from bookkeeping_app.openai_service import (
     extract_transactions_from_image,
@@ -16,6 +18,7 @@ from bookkeeping_app.parsers import is_valid_csv_upload, parse_csv_transactions
 logger = logging.getLogger("bookkeeping_app")
 
 app = FastAPI(title="AI Bookkeeping App MVP")
+MEMORY_PATH: Path = CATEGORIZATION_MEMORY_PATH
 
 
 @app.get("/health")
@@ -26,6 +29,40 @@ def health_check() -> dict[str, str]:
 @app.get("/openai-usage")
 def openai_usage() -> dict[str, int | str]:
     return metrics.snapshot()
+
+
+@app.get("/categorization-memory")
+def get_categorization_memory() -> list[dict[str, object]]:
+    items = load_categorization_memory(MEMORY_PATH)
+    return [item.model_dump(mode="json") for item in items]
+
+
+@app.post("/categorization-memory/import")
+async def import_categorization_memory(file: UploadFile = File(...)) -> JSONResponse:
+    if not is_valid_csv_upload(file):
+        raise HTTPException(status_code=400, detail="Invalid file type. Use a CSV file.")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    try:
+        csv_text = file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="CSV file must be UTF-8 encoded") from exc
+
+    try:
+        result = import_categorization_memory_csv(csv_text, MEMORY_PATH)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logger.info(
+        "Imported categorization memory endpoint=categorization-memory/import filename=%s imported=%s skipped=%s",
+        file.filename,
+        result["imported"],
+        result["skipped"],
+    )
+    return JSONResponse(content=result)
 
 
 @app.post("/extract-transactions")

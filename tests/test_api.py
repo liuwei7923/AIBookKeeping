@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from bookkeeping_app.api import app
@@ -75,3 +77,48 @@ def test_openai_usage_endpoint() -> None:
     response = client.get("/openai-usage")
     assert response.status_code == 200
     assert response.json()["openai_request_count"] == 3
+
+
+def test_import_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
+    memory_path = tmp_path / "categorization_memory.json"
+    monkeypatch.setattr("bookkeeping_app.api.MEMORY_PATH", memory_path)
+
+    csv_bytes = (
+        b"merchant,amount,category,notes\n"
+        b"Electrify America,-7.00,Electric Vehicle Charging,EV charging merchant\n"
+    )
+
+    response = client.post(
+        "/categorization-memory/import",
+        files={"file": ("memory.csv", csv_bytes, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"imported": 1, "skipped": 0}
+
+
+def test_get_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
+    memory_path = tmp_path / "categorization_memory.json"
+    monkeypatch.setattr("bookkeeping_app.api.MEMORY_PATH", memory_path)
+
+    client.post(
+        "/categorization-memory/import",
+        files={
+            "file": (
+                "memory.csv",
+                (
+                    b"merchant,amount,category,notes\n"
+                    b"Whole Foods,-42.19,Groceries,Trusted historical label\n"
+                ),
+                "text/csv",
+            )
+        },
+    )
+
+    response = client.get("/categorization-memory")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["merchant"] == "Whole Foods"
+    assert response.json()[0]["corrected_category"] == "Groceries"
+    assert response.json()[0]["original_category"] is None
