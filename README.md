@@ -2,7 +2,7 @@
 
 CSV-first FastAPI backend for improving transaction categories using your own historical labeling decisions.
 
-Project workflow rules live in [AGENTS.md](/Users/w_liu/FiniancialMind/app/AGENTS.md) and the detailed process is documented in [docs/development-lifecycle.md](/Users/w_liu/FiniancialMind/app/docs/development-lifecycle.md).
+Project workflow rules live in [AGENTS.md](AGENTS.md) and the detailed process is documented in [docs/development-lifecycle.md](docs/development-lifecycle.md).
 
 ## Product Goal
 
