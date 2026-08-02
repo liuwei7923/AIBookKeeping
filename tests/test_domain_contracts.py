@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 from pydantic import ValidationError
 
@@ -18,13 +20,14 @@ def test_source_transaction_preserves_unprocessed_source_values() -> None:
         date="2026-03-24",
         merchant=" ELECTRIFY AMERICA ",
         statement="ELECTRIFY AMERICA 65RESTON VA",
-        amount=-7.0,
+        amount=Decimal("0.1000000000000000001"),
         original_category="Gas",
     )
 
     assert transaction.transaction_id == "txn-1"
     assert transaction.merchant == " ELECTRIFY AMERICA "
     assert transaction.statement == "ELECTRIFY AMERICA 65RESTON VA"
+    assert transaction.amount == Decimal("0.1000000000000000001")
     assert transaction.original_category == "Gas"
 
 
@@ -81,6 +84,26 @@ def test_ai_new_category_proposal_uses_only_proposed_category() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("decision_type", "category_field"),
+    [
+        (DecisionType.AI_SUGGESTION, "suggested_category"),
+        (DecisionType.AI_PROPOSED_NEW_CATEGORY, "proposed_category"),
+    ],
+)
+def test_ai_category_values_must_not_be_blank(
+    decision_type: DecisionType,
+    category_field: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        CategorizationDecision(
+            decision_id="decision-blank-category",
+            decision_type=decision_type,
+            reason="AI returned an unusable category.",
+            **{category_field: " "},
+        )
+
+
 def test_unresolved_ai_decision_contains_no_category() -> None:
     fields = {
         "decision_id": "decision-3",
@@ -97,6 +120,16 @@ def test_unresolved_ai_decision_contains_no_category() -> None:
     with pytest.raises(ValidationError):
         CategorizationDecision(
             **(fields | {"suggested_category": "Transportation"})
+        )
+
+
+def test_ai_decision_rejects_blank_supporting_memory_id() -> None:
+    with pytest.raises(ValidationError):
+        CategorizationDecision(
+            decision_id="decision-4",
+            decision_type=DecisionType.UNRESOLVED,
+            reason="The available evidence is conflicting.",
+            supporting_memory_ids=["memory-1", " "],
         )
 
 

@@ -33,10 +33,12 @@ content.
 | `date` | Date value supplied by the source, if present. |
 | `merchant` | Merchant text supplied by the source, if present. |
 | `statement` | Statement or description supplied by the source, if present. |
-| `amount` | Parsed numeric amount, if available. |
+| `amount` | Exact decimal amount, if available. |
 | `original_category` | Category supplied by the source, if present. |
 
 Source values are preserved; normalization belongs to canonical processing.
+Amounts use `Decimal` so financial values are not rounded through binary
+floating-point conversion.
 
 ## Canonical Transaction
 

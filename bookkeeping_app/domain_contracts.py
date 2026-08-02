@@ -1,8 +1,16 @@
 """Framework-independent transaction and categorization domain contracts."""
 
+from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 
 def _require_non_blank(value: str, field_name: str) -> str:
@@ -44,7 +52,7 @@ class SourceTransaction(BaseModel):
     date: str | None = None
     merchant: str | None = None
     statement: str | None = None
-    amount: float | None = None
+    amount: Decimal | None = None
     original_category: str | None = None
 
     @field_validator("transaction_id")
@@ -81,30 +89,34 @@ class CategorizationDecision(BaseModel):
 
     @field_validator("decision_id", "reason")
     @classmethod
-    def required_text_must_not_be_blank(cls, value: str, info) -> str:
+    def required_text_must_not_be_blank(cls, value: str, info: ValidationInfo) -> str:
         return _require_non_blank(value, info.field_name)
 
-    @model_validator(mode="after")
-    def suggestion_contains_only_suggested_category(self) -> "CategorizationDecision":
-        if self.decision_type is not DecisionType.AI_SUGGESTION:
-            return self
-        if not self.suggested_category or self.proposed_category:
-            raise ValueError("AI suggestion must contain only suggested_category")
-        return self
+    @field_validator("suggested_category", "proposed_category")
+    @classmethod
+    def category_must_not_be_blank(
+        cls,
+        value: str | None,
+        info: ValidationInfo,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _require_non_blank(value, info.field_name)
+
+    @field_validator("supporting_memory_ids")
+    @classmethod
+    def supporting_memory_ids_must_not_be_blank(cls, values: list[str]) -> list[str]:
+        return [_require_non_blank(value, "supporting_memory_id") for value in values]
 
     @model_validator(mode="after")
-    def proposal_contains_only_proposed_category(self) -> "CategorizationDecision":
-        if self.decision_type is not DecisionType.AI_PROPOSED_NEW_CATEGORY:
-            return self
-        if not self.proposed_category or self.suggested_category:
-            raise ValueError("AI category proposal must contain only proposed_category")
-        return self
-
-    @model_validator(mode="after")
-    def unresolved_contains_no_category(self) -> "CategorizationDecision":
-        if self.decision_type is not DecisionType.UNRESOLVED:
-            return self
-        if self.suggested_category or self.proposed_category:
+    def category_matches_decision_type(self) -> "CategorizationDecision":
+        if self.decision_type is DecisionType.AI_SUGGESTION:
+            if not self.suggested_category or self.proposed_category:
+                raise ValueError("AI suggestion must contain only suggested_category")
+        elif self.decision_type is DecisionType.AI_PROPOSED_NEW_CATEGORY:
+            if not self.proposed_category or self.suggested_category:
+                raise ValueError("AI category proposal must contain only proposed_category")
+        elif self.suggested_category or self.proposed_category:
             raise ValueError("unresolved AI decision cannot contain a category")
         return self
 
