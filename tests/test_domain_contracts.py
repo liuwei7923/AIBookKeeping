@@ -2,293 +2,136 @@ import pytest
 from pydantic import ValidationError
 
 from bookkeeping_app.domain_contracts import (
-    BatchStatus,
     CanonicalTransaction,
     CategorizationDecision,
-    DecisionConfidence,
     DecisionType,
-    RecategorizationBatch,
-    RecategorizationResult,
+    ManualCategorization,
+    SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
 )
 
 
-def test_canonical_transaction_preserves_source_and_normalized_identity() -> None:
-    transaction = CanonicalTransaction(
+def test_source_transaction_preserves_unprocessed_source_values() -> None:
+    transaction = SourceTransaction(
         transaction_id="txn-1",
         date="2026-03-24",
         merchant=" ELECTRIFY AMERICA ",
         statement="ELECTRIFY AMERICA 65RESTON VA",
         amount=-7.0,
         original_category="Gas",
-        normalized_merchant="electrify america",
-        normalized_statement="electrify america 65reston va",
-        direction=TransactionDirection.DEBIT,
-        identity_quality=TransactionIdentityQuality.COMPLETE,
-        fingerprint="sha256:abc123",
     )
 
     assert transaction.transaction_id == "txn-1"
     assert transaction.merchant == " ELECTRIFY AMERICA "
-    assert transaction.normalized_merchant == "electrify america"
-    assert transaction.direction is TransactionDirection.DEBIT
-    assert transaction.identity_quality is TransactionIdentityQuality.COMPLETE
+    assert transaction.statement == "ELECTRIFY AMERICA 65RESTON VA"
+    assert transaction.original_category == "Gas"
 
 
-def test_domain_contracts_reject_blank_identifiers() -> None:
+def test_source_transaction_rejects_blank_identifier() -> None:
     with pytest.raises(ValidationError):
-        CanonicalTransaction(
-            transaction_id=" ",
-            direction=TransactionDirection.UNKNOWN,
-            identity_quality=TransactionIdentityQuality.INSUFFICIENT,
-        )
+        SourceTransaction(transaction_id=" ")
 
+
+def test_manual_categorization_records_a_trusted_user_category() -> None:
+    categorization = ManualCategorization(
+        category="Electric Vehicle Charging",
+        note="Confirmed from charging receipt.",
+    )
+
+    assert categorization.category == "Electric Vehicle Charging"
+    assert categorization.note == "Confirmed from charging receipt."
+
+
+def test_manual_categorization_rejects_blank_category() -> None:
     with pytest.raises(ValidationError):
-        CategorizationDecision(
-            transaction_id=" ",
-            decision_type=DecisionType.UNRESOLVED,
-            needs_review=True,
-            reason="Transaction identity is insufficient.",
-        )
-
-    with pytest.raises(ValidationError):
-        RecategorizationBatch(
-            batch_id=" ",
-            status=BatchStatus.COMPLETED,
-            results=[],
-            openai_request_count=0,
-        )
+        ManualCategorization(category=" ")
 
 
-def test_exact_statement_match_contains_only_an_accepted_category() -> None:
+def test_ai_suggestion_records_category_reason_and_supporting_memory() -> None:
     decision = CategorizationDecision(
-        transaction_id="txn-1",
-        decision_type=DecisionType.EXACT_STATEMENT_MEMORY_MATCH,
-        accepted_category="Electric Vehicle Charging",
-        needs_review=False,
-        confidence=DecisionConfidence.HIGH,
-        reason="Matched a trusted transaction statement.",
+        decision_id="decision-1",
+        decision_type=DecisionType.AI_SUGGESTION,
+        suggested_category="Electric Vehicle Charging",
+        reason="The merchant and statement describe an EV charging session.",
         supporting_memory_ids=["memory-1"],
     )
 
-    assert decision.accepted_category == "Electric Vehicle Charging"
-    assert decision.suggested_category is None
+    assert decision.suggested_category == "Electric Vehicle Charging"
     assert decision.proposed_category is None
-    assert decision.needs_review is False
+    assert decision.supporting_memory_ids == ["memory-1"]
 
 
-@pytest.mark.parametrize(
-    ("decision_type", "category_field"),
-    [
-        (DecisionType.AI_SUGGESTION_WITH_RELEVANT_MEMORY, "suggested_category"),
-        (DecisionType.AI_SUGGESTION_WITHOUT_RELEVANT_MEMORY, "suggested_category"),
-        (DecisionType.AI_PROPOSED_NEW_CATEGORY, "proposed_category"),
-    ],
-)
-def test_every_ai_decision_uses_its_distinct_category_field_and_needs_review(
-    decision_type: DecisionType,
-    category_field: str,
-) -> None:
+def test_ai_new_category_proposal_uses_only_proposed_category() -> None:
     fields = {
-        "transaction_id": "txn-1",
-        "decision_type": decision_type,
-        category_field: "Electric Vehicle Charging",
-        "needs_review": True,
-        "confidence": DecisionConfidence.MEDIUM,
-        "reason": "AI reviewed the available evidence.",
-        "supporting_memory_ids": (
-            ["memory-1"]
-            if decision_type is DecisionType.AI_SUGGESTION_WITH_RELEVANT_MEMORY
-            else []
-        ),
+        "decision_id": "decision-2",
+        "decision_type": DecisionType.AI_PROPOSED_NEW_CATEGORY,
+        "proposed_category": "Electric Vehicle Charging",
+        "reason": "No existing category describes an EV charging session.",
     }
 
     decision = CategorizationDecision(**fields)
 
-    assert getattr(decision, category_field) == "Electric Vehicle Charging"
-    assert decision.accepted_category is None
-
-    with pytest.raises(ValidationError):
-        CategorizationDecision(**(fields | {"needs_review": False}))
-
-
-def test_ai_memory_context_type_agrees_with_supporting_memory() -> None:
-    common_fields = {
-        "transaction_id": "txn-1",
-        "suggested_category": "Electric Vehicle Charging",
-        "needs_review": True,
-        "reason": "AI reviewed the available evidence.",
-    }
+    assert decision.proposed_category == "Electric Vehicle Charging"
+    assert decision.suggested_category is None
 
     with pytest.raises(ValidationError):
         CategorizationDecision(
-            decision_type=DecisionType.AI_SUGGESTION_WITH_RELEVANT_MEMORY,
-            supporting_memory_ids=[],
-            **common_fields,
-        )
-
-    with pytest.raises(ValidationError):
-        CategorizationDecision(
-            decision_type=DecisionType.AI_SUGGESTION_WITHOUT_RELEVANT_MEMORY,
-            supporting_memory_ids=["memory-1"],
-            **common_fields,
+            **(fields | {"suggested_category": "Transportation"})
         )
 
 
-def test_merchant_consensus_contains_only_an_accepted_category() -> None:
+def test_unresolved_ai_decision_contains_no_category() -> None:
     fields = {
-        "transaction_id": "txn-2",
-        "decision_type": DecisionType.MERCHANT_CONSENSUS,
-        "accepted_category": "Restaurants",
-        "needs_review": False,
-        "confidence": DecisionConfidence.HIGH,
-        "reason": "Trusted merchant history has unanimous category evidence.",
+        "decision_id": "decision-3",
+        "decision_type": DecisionType.UNRESOLVED,
+        "reason": "The available evidence is conflicting.",
         "supporting_memory_ids": ["memory-2", "memory-3"],
     }
 
     decision = CategorizationDecision(**fields)
 
-    assert decision.accepted_category == "Restaurants"
-
-    with pytest.raises(ValidationError):
-        CategorizationDecision(
-            **(
-                fields
-                | {
-                    "accepted_category": None,
-                    "suggested_category": "Restaurants",
-                }
-            )
-        )
-
-
-def test_unresolved_categorization_has_no_category_and_needs_review() -> None:
-    fields = {
-        "transaction_id": "txn-3",
-        "decision_type": DecisionType.UNRESOLVED,
-        "needs_review": True,
-        "confidence": DecisionConfidence.LOW,
-        "reason": "Available evidence is conflicting.",
-    }
-
-    decision = CategorizationDecision(**fields)
-
-    assert decision.accepted_category is None
     assert decision.suggested_category is None
     assert decision.proposed_category is None
 
     with pytest.raises(ValidationError):
-        CategorizationDecision(**(fields | {"accepted_category": "Restaurants"}))
-
-
-def test_recategorization_batch_preserves_order_and_reports_summary_counts() -> None:
-    decision_specs = [
-        {
-            "decision_type": DecisionType.EXACT_STATEMENT_MEMORY_MATCH,
-            "accepted_category": "Restaurants",
-            "needs_review": False,
-        },
-        {
-            "decision_type": DecisionType.AI_SUGGESTION_WITHOUT_RELEVANT_MEMORY,
-            "suggested_category": "Travel",
-            "needs_review": True,
-        },
-        {
-            "decision_type": DecisionType.UNRESOLVED,
-            "needs_review": True,
-        },
-    ]
-    results = []
-    for position, decision_spec in enumerate(decision_specs):
-        transaction_id = f"txn-{position}"
-        transaction = CanonicalTransaction(
-            transaction_id=transaction_id,
-            direction=TransactionDirection.DEBIT,
-            identity_quality=TransactionIdentityQuality.PARTIAL,
-        )
-        decision = CategorizationDecision(
-            transaction_id=transaction_id,
-            confidence=DecisionConfidence.LOW,
-            reason="Representative batch decision.",
-            **decision_spec,
-        )
-        results.append(
-            RecategorizationResult(
-                position=position,
-                transaction=transaction,
-                decision=decision,
-            )
+        CategorizationDecision(
+            **(fields | {"suggested_category": "Transportation"})
         )
 
-    batch = RecategorizationBatch(
-        batch_id="batch-1",
-        status=BatchStatus.COMPLETED,
-        results=results,
-        openai_request_count=1,
+
+def test_canonical_transaction_keeps_source_identity_and_both_categorizations() -> None:
+    source = SourceTransaction(
+        transaction_id="txn-1",
+        merchant=" ELECTRIFY AMERICA ",
+        statement="ELECTRIFY AMERICA 65RESTON VA",
+        amount=-7.0,
+        original_category="Gas",
+    )
+    ai_decision = CategorizationDecision(
+        decision_id="decision-1",
+        decision_type=DecisionType.AI_SUGGESTION,
+        suggested_category="Electric Vehicle Charging",
+        reason="The transaction describes an EV charging session.",
+    )
+    manual_categorization = ManualCategorization(
+        category="Vehicle Charging",
+        note="User corrected the category name.",
     )
 
-    assert [result.transaction.transaction_id for result in batch.results] == [
-        "txn-0",
-        "txn-1",
-        "txn-2",
-    ]
-    assert batch.total_count == 3
-    assert batch.deterministic_count == 1
-    assert batch.ai_reviewed_count == 1
-    assert batch.unknown_count == 1
-    assert batch.needs_review_count == 2
-    assert batch.approval_required is False
-
-
-def test_recategorization_batch_rejects_a_result_out_of_input_order() -> None:
     transaction = CanonicalTransaction(
-        transaction_id="txn-0",
-        direction=TransactionDirection.UNKNOWN,
-        identity_quality=TransactionIdentityQuality.INSUFFICIENT,
-    )
-    decision = CategorizationDecision(
-        transaction_id="txn-0",
-        decision_type=DecisionType.UNRESOLVED,
-        needs_review=True,
-        reason="Transaction identity is insufficient.",
-    )
-    misplaced_result = RecategorizationResult(
-        position=1,
-        transaction=transaction,
-        decision=decision,
+        source=source,
+        normalized_merchant="electrify america",
+        normalized_statement="electrify america 65reston va",
+        direction=TransactionDirection.DEBIT,
+        identity_quality=TransactionIdentityQuality.COMPLETE,
+        fingerprint="sha256:abc123",
+        ai_categorization=ai_decision,
+        manual_categorization=manual_categorization,
     )
 
-    with pytest.raises(ValidationError):
-        RecategorizationBatch(
-            batch_id="batch-2",
-            status=BatchStatus.APPROVAL_REQUIRED,
-            results=[misplaced_result],
-            openai_request_count=0,
-        )
-
-
-def test_recategorization_batch_rejects_duplicate_request_scoped_ids() -> None:
-    transaction = CanonicalTransaction(
-        transaction_id="txn-0",
-        direction=TransactionDirection.UNKNOWN,
-        identity_quality=TransactionIdentityQuality.INSUFFICIENT,
-    )
-    decision = CategorizationDecision(
-        transaction_id="txn-0",
-        decision_type=DecisionType.UNRESOLVED,
-        needs_review=True,
-        reason="Transaction identity is insufficient.",
-    )
-    results = [
-        RecategorizationResult(position=0, transaction=transaction, decision=decision),
-        RecategorizationResult(position=1, transaction=transaction, decision=decision),
-    ]
-
-    with pytest.raises(ValidationError):
-        RecategorizationBatch(
-            batch_id="batch-3",
-            status=BatchStatus.COMPLETED,
-            results=results,
-            openai_request_count=0,
-        )
+    assert transaction.source.merchant == " ELECTRIFY AMERICA "
+    assert transaction.normalized_merchant == "electrify america"
+    assert transaction.fingerprint == "sha256:abc123"
+    assert transaction.ai_categorization == ai_decision
+    assert transaction.manual_categorization == manual_categorization
