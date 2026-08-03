@@ -232,6 +232,23 @@ The API runs at `http://127.0.0.1:8000`.
 pytest
 ```
 
+## Generate Dummy Transactions
+
+Generate deterministic source and canonical transactions for local manual
+judgment UI development:
+
+```bash
+python -m bookkeeping_app.dummy_data \
+  --count 24 \
+  --seed 42 \
+  --output data/dummy_transactions.json
+```
+
+The same count and seed always produce the same JSON. Use at least eight
+transactions to include every supported manual judgment state. See
+[docs/dummy-transaction-data.md](docs/dummy-transaction-data.md) for the dataset
+shape and scenario details.
+
 ## Current Status
 
 The repository already includes:
