@@ -7,7 +7,7 @@ OpenAI, read user data, or require Faker.
 ## Python Interface
 
 ```python
-from bookkeeping_app.dummy_data import generate_dummy_transactions
+from scripts.dummy_data import generate_dummy_transactions
 
 dataset = generate_dummy_transactions(count=24, seed=42)
 ```
@@ -27,7 +27,7 @@ JSON. A different seed changes transaction content. `count` must be positive.
 ## Command Line
 
 ```bash
-python -m bookkeeping_app.dummy_data \
+python -m scripts.dummy_data \
   --count 24 \
   --seed 42 \
   --output data/dummy_transactions.json

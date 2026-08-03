@@ -238,7 +238,7 @@ Generate deterministic source and canonical transactions for local manual
 judgment UI development:
 
 ```bash
-python -m bookkeeping_app.dummy_data \
+python -m scripts.dummy_data \
   --count 24 \
   --seed 42 \
   --output data/dummy_transactions.json

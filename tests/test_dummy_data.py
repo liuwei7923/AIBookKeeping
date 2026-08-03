@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from bookkeeping_app.dummy_data import (
+from scripts.dummy_data import (
     DummyTransactionDataset,
     generate_dummy_transactions,
 )
@@ -115,7 +115,7 @@ def test_dummy_data_cli_writes_a_valid_dataset(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "bookkeeping_app.dummy_data",
+            "scripts.dummy_data",
             "--count",
             "8",
             "--seed",
