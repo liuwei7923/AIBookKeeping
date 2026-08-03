@@ -248,6 +248,13 @@ The API runs at `http://127.0.0.1:8000`.
 pytest
 ```
 
+## Continuous Integration
+
+GitHub Actions runs Python compilation and the full test suite for every pull
+request and every push to `master`. The workflow does not require an OpenAI API
+key. Configure the `test` job as a required status check in the repository's
+branch protection settings.
+
 ## Generate Dummy Transactions
 
 Generate deterministic source and canonical transactions for local manual
