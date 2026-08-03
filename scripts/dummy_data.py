@@ -2,7 +2,7 @@
 
 Run from the repository root::
 
-    python -m scripts.dummy_data --count 24 --seed 42 --output data/dummy_transactions.json
+    python -m scripts.dummy_data --user-id 550e8400-e29b-41d4-a716-446655440000 --count 24 --seed 42 --output data/dummy_transactions.json
 
 The output is one ``DummyTransactionDataset`` JSON object containing paired
 ``source_transactions`` and ``canonical_transactions`` arrays. Each canonical
@@ -13,9 +13,10 @@ direction values. Scenario placement is independent of the seed: every eight
 records cycle through unreviewed, AI suggestion, proposed category, unresolved,
 accepted AI, corrected AI, manual-only, and incomplete-input states.
 
-Call ``generate_dummy_transactions(count=..., seed=...)`` directly when models
-are more useful than a file. Generation is local, performs no filesystem writes,
-and does not call OpenAI; only the command-line adapter writes JSON.
+Call ``generate_dummy_transactions(user_id=..., count=..., seed=...)`` directly
+when models are more useful than a file. Generation is local, performs no
+filesystem writes, and does not call OpenAI; only the command-line adapter
+writes JSON.
 """
 
 import argparse
@@ -26,7 +27,7 @@ from hashlib import sha256
 from pathlib import Path
 from random import Random
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
@@ -36,6 +37,7 @@ from bookkeeping_app.domain_contracts import (
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
+    UserId,
 )
 
 MERCHANTS = (
@@ -82,8 +84,16 @@ class DummyTransactionDataset(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    user_id: UserId
     source_transactions: list[SourceTransaction]
     canonical_transactions: list[CanonicalTransaction]
+
+    @model_validator(mode="after")
+    def transactions_belong_to_dataset_user(self) -> "DummyTransactionDataset":
+        transactions = [*self.source_transactions, *self.canonical_transactions]
+        if any(transaction.user_id != self.user_id for transaction in transactions):
+            raise ValueError("all transactions must match dataset user_id")
+        return self
 
 
 def _build_categorizations(
@@ -161,7 +171,12 @@ def _build_categorizations(
     return None, None
 
 
-def generate_dummy_transactions(*, count: int = 50, seed: int = 42) -> DummyTransactionDataset:
+def generate_dummy_transactions(
+    *,
+    user_id: UserId,
+    count: int = 50,
+    seed: int = 42,
+) -> DummyTransactionDataset:
     """Generate a deterministic, validated transaction dataset."""
 
     if count <= 0:
@@ -187,6 +202,7 @@ def generate_dummy_transactions(*, count: int = 50, seed: int = 42) -> DummyTran
         transaction_id = f"txn-{index + 1:04d}"
         transaction_date = date(2026, 1, 1) + timedelta(days=rng.randint(0, 180))
         source = SourceTransaction(
+            user_id=user_id,
             transaction_id=transaction_id,
             date=transaction_date.isoformat(),
             merchant=None if is_incomplete else merchant,
@@ -205,6 +221,7 @@ def generate_dummy_transactions(*, count: int = 50, seed: int = 42) -> DummyTran
             )
             fingerprint = f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
         canonical = CanonicalTransaction(
+            user_id=user_id,
             source=source,
             normalized_merchant=None if is_incomplete else normalized_merchant,
             normalized_statement=None if is_incomplete else statement.lower(),
@@ -226,6 +243,7 @@ def generate_dummy_transactions(*, count: int = 50, seed: int = 42) -> DummyTran
         canonical_transactions.append(canonical)
 
     return DummyTransactionDataset(
+        user_id=user_id,
         source_transactions=source_transactions,
         canonical_transactions=canonical_transactions,
     )
@@ -239,10 +257,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--count", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--user-id", type=UserId, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
-    dataset = generate_dummy_transactions(count=args.count, seed=args.seed)
+    dataset = generate_dummy_transactions(
+        user_id=args.user_id,
+        count=args.count,
+        seed=args.seed,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(dataset.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return 0

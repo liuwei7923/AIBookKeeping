@@ -7,9 +7,15 @@ OpenAI, read user data, or require Faker.
 ## Python Interface
 
 ```python
+from uuid import UUID
+
 from scripts.dummy_data import generate_dummy_transactions
 
-dataset = generate_dummy_transactions(count=24, seed=42)
+dataset = generate_dummy_transactions(
+    user_id=UUID("550e8400-e29b-41d4-a716-446655440000"),
+    count=24,
+    seed=42,
+)
 ```
 
 `generate_dummy_transactions` returns a validated `DummyTransactionDataset`
@@ -17,17 +23,21 @@ with two arrays:
 
 | Field | Contents |
 | --- | --- |
+| `user_id` | UUID that owns the complete generated dataset. |
 | `source_transactions` | Original transaction-level values before processing. |
 | `canonical_transactions` | Processed records with identity and categorization state. |
 
 The arrays have the requested length and matching records use the same embedded
-`SourceTransaction`. The same `count` and `seed` produce byte-equivalent model
-JSON. A different seed changes transaction content. `count` must be positive.
+`SourceTransaction`. The dataset validates that every source and canonical
+record carries the same `user_id` as its top-level owner. The same `count` and
+`seed` produce byte-equivalent model JSON. A different seed changes transaction
+content. `count` must be positive.
 
 ## Command Line
 
 ```bash
 python -m scripts.dummy_data \
+  --user-id 550e8400-e29b-41d4-a716-446655440000 \
   --count 24 \
   --seed 42 \
   --output data/dummy_transactions.json
@@ -35,6 +45,18 @@ python -m scripts.dummy_data \
 
 The command creates missing parent directories and writes one JSON object that
 can be validated with `DummyTransactionDataset.model_validate_json(...)`.
+`--user-id` is required and must be a UUID; the generator never falls back to
+an implicit user.
+
+Generate fixtures for a second user by changing both the owner and output path:
+
+```bash
+python -m scripts.dummy_data \
+  --user-id 550e8400-e29b-41d4-a716-446655440001 \
+  --count 24 \
+  --seed 99 \
+  --output data/second-user-dummy-transactions.json
+```
 
 ## Manual Judgment States
 

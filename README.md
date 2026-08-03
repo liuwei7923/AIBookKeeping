@@ -239,13 +239,16 @@ judgment UI development:
 
 ```bash
 python -m scripts.dummy_data \
+  --user-id 550e8400-e29b-41d4-a716-446655440000 \
   --count 24 \
   --seed 42 \
   --output data/dummy_transactions.json
 ```
 
-The same count and seed always produce the same JSON. Use at least eight
-transactions to include every supported manual judgment state. See
+The UUID user ID is required and becomes the dataset owner. Every generated
+source and canonical transaction must match it. The same user ID, count, and
+seed always produce the same JSON. Use at least eight transactions to include
+every supported manual judgment state. See
 [docs/dummy-transaction-data.md](docs/dummy-transaction-data.md) for the dataset
 shape and scenario details.
 
