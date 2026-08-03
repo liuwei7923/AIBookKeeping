@@ -25,7 +25,9 @@ def get_openai_client() -> OpenAI:
 
 def raise_openai_http_error(exc: Exception) -> None:
     if isinstance(exc, APIStatusError):
-        logger.error("OpenAI API status error status=%s message=%s", exc.status_code, str(exc))
+        logger.error(
+            "OpenAI API status error status=%s message=%s", exc.status_code, str(exc)
+        )
         if exc.status_code == 429:
             raise HTTPException(
                 status_code=429,
@@ -39,10 +41,14 @@ def raise_openai_http_error(exc: Exception) -> None:
 
     if isinstance(exc, APIError):
         logger.error("OpenAI API error message=%s", str(exc))
-        raise HTTPException(status_code=502, detail="OpenAI API request failed") from exc
+        raise HTTPException(
+            status_code=502, detail="OpenAI API request failed"
+        ) from exc
 
     logger.exception("Unexpected error while calling OpenAI")
-    raise HTTPException(status_code=502, detail="Unexpected error while calling OpenAI") from exc
+    raise HTTPException(
+        status_code=502, detail="Unexpected error while calling OpenAI"
+    ) from exc
 
 
 def build_category_review_input(
@@ -62,7 +68,9 @@ def build_category_review_input(
     }
 
     if category_history:
-        payload["manual_override_examples"] = category_history[:MAX_CATEGORY_CONTEXT_ITEMS]
+        payload["manual_override_examples"] = category_history[
+            :MAX_CATEGORY_CONTEXT_ITEMS
+        ]
 
     return (
         "Review these transactions and suggest corrected categories when needed.\n\n"
@@ -92,7 +100,9 @@ def review_transaction_categories(
                     "content": [
                         {
                             "type": "input_text",
-                            "text": build_category_review_input(transactions, category_history),
+                            "text": build_category_review_input(
+                                transactions, category_history
+                            ),
                         }
                     ],
                 },

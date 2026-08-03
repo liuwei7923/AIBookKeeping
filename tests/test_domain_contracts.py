@@ -121,9 +121,7 @@ def test_ai_new_category_proposal_uses_only_proposed_category() -> None:
     assert decision.suggested_category is None
 
     with pytest.raises(ValidationError):
-        CategorizationDecision(
-            **(fields | {"suggested_category": "Transportation"})
-        )
+        CategorizationDecision(**(fields | {"suggested_category": "Transportation"}))
 
 
 @pytest.mark.parametrize(
@@ -160,9 +158,7 @@ def test_unresolved_ai_decision_contains_no_category() -> None:
     assert decision.proposed_category is None
 
     with pytest.raises(ValidationError):
-        CategorizationDecision(
-            **(fields | {"suggested_category": "Transportation"})
-        )
+        CategorizationDecision(**(fields | {"suggested_category": "Transportation"}))
 
 
 def test_ai_decision_rejects_blank_supporting_memory_id() -> None:

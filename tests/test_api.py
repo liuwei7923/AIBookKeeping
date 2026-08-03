@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from bookkeeping_app.api import app
 from bookkeeping_app.metrics import metrics
 
-
 client = TestClient(app)
 
 
@@ -13,9 +12,7 @@ def test_openapi_exposes_only_the_supported_routes() -> None:
     paths = app.openapi()["paths"]
 
     assert {
-        (method.upper(), path)
-        for path, methods in paths.items()
-        for method in methods
+        (method.upper(), path) for path, methods in paths.items() for method in methods
     } == {
         ("GET", "/health"),
         ("GET", "/admin/openai-usage"),
@@ -135,7 +132,9 @@ def test_get_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
     assert "id" not in response.json()[0]
 
 
-def test_get_categorization_memory_uses_public_field_names(tmp_path: Path, monkeypatch) -> None:
+def test_get_categorization_memory_uses_public_field_names(
+    tmp_path: Path, monkeypatch
+) -> None:
     memory_path = tmp_path / "categorization_memory.json"
     monkeypatch.setattr(
         "bookkeeping_app.routes.categorization_memory.MEMORY_PATH",

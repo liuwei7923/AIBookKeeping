@@ -83,7 +83,9 @@ def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
             continue
 
         category = find_memory_csv_value(row, ["category", "corrected_category"])
-        merchant = find_memory_csv_value(row, ["merchant", "description", "payee", "name"])
+        merchant = find_memory_csv_value(
+            row, ["merchant", "description", "payee", "name"]
+        )
 
         if merchant is None or category is None:
             continue
@@ -92,9 +94,15 @@ def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
             build_memory_item(
                 merchant=merchant,
                 corrected_category=category,
-                amount=find_memory_csv_value(row, ["amount", "transaction amount", "value"]),
-                date=find_memory_csv_value(row, ["date", "transaction date", "posted date"]),
-                statement=find_memory_csv_value(row, ["original statement", "statement"]),
+                amount=find_memory_csv_value(
+                    row, ["amount", "transaction amount", "value"]
+                ),
+                date=find_memory_csv_value(
+                    row, ["date", "transaction date", "posted date"]
+                ),
+                statement=find_memory_csv_value(
+                    row, ["original statement", "statement"]
+                ),
                 original_category=find_memory_csv_value(row, ["original_category"]),
                 notes=find_memory_csv_value(row, ["notes"]),
             )
@@ -138,7 +146,9 @@ def ensure_memory_file(path: Path | None = None) -> None:
         path.write_text("[]", encoding="utf-8")
 
 
-def load_categorization_memory(path: Path | None = None) -> list[CategorizationMemoryItem]:
+def load_categorization_memory(
+    path: Path | None = None,
+) -> list[CategorizationMemoryItem]:
     path = resolve_memory_path(path)
     ensure_memory_file(path)
     raw_items = json.loads(path.read_text(encoding="utf-8"))

@@ -53,7 +53,9 @@ def running_server(tmp_path: Path):
     else:
         process.terminate()
         stdout, stderr = process.communicate(timeout=5)
-        raise RuntimeError(f"Server did not start.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+        raise RuntimeError(
+            f"Server did not start.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+        )
 
     process.terminate()
     process.wait(timeout=5)
