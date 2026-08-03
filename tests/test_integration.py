@@ -1,6 +1,7 @@
 import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def running_server(tmp_path: Path):
 
     process = subprocess.Popen(
         [
-            str(Path(".venv/bin/python")),
+            sys.executable,
             "-m",
             "uvicorn",
             "main:app",
