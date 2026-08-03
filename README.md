@@ -246,9 +246,10 @@ python -m scripts.dummy_data \
 ```
 
 The UUID user ID is required and becomes the dataset owner. Every generated
-source and canonical transaction must match it. The same user ID, count, and
-seed always produce the same JSON. Use at least eight transactions to include
-every supported manual judgment state. See
+source transaction uses it, and canonical transactions inherit ownership from
+their embedded source rather than duplicating the field. The same user ID,
+count, and seed always produce the same JSON. Use at least eight transactions
+to include every supported manual judgment state. See
 [docs/dummy-transaction-data.md](docs/dummy-transaction-data.md) for the dataset
 shape and scenario details.
 

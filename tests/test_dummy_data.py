@@ -56,7 +56,11 @@ def test_dummy_dataset_round_trips_through_json() -> None:
     )
     assert all(source.user_id == USER_ID for source in restored.source_transactions)
     assert all(
-        canonical.user_id == USER_ID
+        canonical.source.user_id == USER_ID
+        for canonical in restored.canonical_transactions
+    )
+    assert all(
+        "user_id" not in canonical.model_dump()
         for canonical in restored.canonical_transactions
     )
 
