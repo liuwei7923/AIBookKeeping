@@ -58,7 +58,6 @@ identity plus the latest AI and manual categorization state.
 
 | Field | Meaning |
 | --- | --- |
-| `user_id` | Required owner; must match the embedded source transaction. |
 | `source` | The source transaction from which this record was produced. |
 | `normalized_merchant` | Merchant identity produced by normalization. |
 | `normalized_statement` | Statement identity produced by normalization. |
@@ -72,9 +71,9 @@ The AI and manual categorizations may coexist. Manual review does not overwrite
 the AI decision, allowing later comparison between the suggestion and the
 category selected by the user.
 
-User IDs are UUIDs assigned to a `User`. `CategorizationDecision` and
-`ManualCategorization` inherit the canonical transaction's owner rather than
-duplicating `user_id`.
+User IDs are UUIDs assigned to a `User`. `CanonicalTransaction`,
+`CategorizationDecision`, and `ManualCategorization` inherit ownership from the
+embedded source transaction rather than duplicating `user_id`.
 
 ## AI Categorization Decision
 

@@ -16,7 +16,6 @@ from bookkeeping_app.domain_contracts import (
 )
 
 USER_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
-OTHER_USER_ID = UUID("550e8400-e29b-41d4-a716-446655440001")
 
 
 def test_user_gets_a_generated_uuid() -> None:
@@ -197,7 +196,6 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
     )
 
     transaction = CanonicalTransaction(
-        user_id=USER_ID,
         source=source,
         normalized_merchant="electrify america",
         normalized_statement="electrify america 65reston va",
@@ -208,21 +206,9 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
         manual_categorization=manual_categorization,
     )
 
-    assert transaction.user_id == USER_ID
+    assert transaction.source.user_id == USER_ID
     assert transaction.source.merchant == " ELECTRIFY AMERICA "
     assert transaction.normalized_merchant == "electrify america"
     assert transaction.fingerprint == "sha256:abc123"
     assert transaction.ai_categorization == ai_decision
     assert transaction.manual_categorization == manual_categorization
-
-
-def test_canonical_transaction_rejects_source_owned_by_another_user() -> None:
-    source = SourceTransaction(user_id=USER_ID, transaction_id="txn-1")
-
-    with pytest.raises(ValidationError, match="must match source user_id"):
-        CanonicalTransaction(
-            user_id=OTHER_USER_ID,
-            source=source,
-            direction=TransactionDirection.UNKNOWN,
-            identity_quality=TransactionIdentityQuality.INSUFFICIENT,
-        )

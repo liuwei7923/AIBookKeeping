@@ -90,8 +90,11 @@ class DummyTransactionDataset(BaseModel):
 
     @model_validator(mode="after")
     def transactions_belong_to_dataset_user(self) -> "DummyTransactionDataset":
-        transactions = [*self.source_transactions, *self.canonical_transactions]
-        if any(transaction.user_id != self.user_id for transaction in transactions):
+        source_transactions = [
+            *self.source_transactions,
+            *(canonical.source for canonical in self.canonical_transactions),
+        ]
+        if any(source.user_id != self.user_id for source in source_transactions):
             raise ValueError("all transactions must match dataset user_id")
         return self
 
@@ -221,7 +224,6 @@ def generate_dummy_transactions(
             )
             fingerprint = f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
         canonical = CanonicalTransaction(
-            user_id=user_id,
             source=source,
             normalized_merchant=None if is_incomplete else normalized_merchant,
             normalized_statement=None if is_incomplete else statement.lower(),

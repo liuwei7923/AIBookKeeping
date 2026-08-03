@@ -146,7 +146,6 @@ class CanonicalTransaction(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_id: UserId
     source: SourceTransaction
     normalized_merchant: str | None = None
     normalized_statement: str | None = None
@@ -155,9 +154,3 @@ class CanonicalTransaction(BaseModel):
     fingerprint: str | None = Field(default=None, min_length=1)
     ai_categorization: CategorizationDecision | None = None
     manual_categorization: ManualCategorization | None = None
-
-    @model_validator(mode="after")
-    def user_id_matches_source(self) -> "CanonicalTransaction":
-        if self.user_id != self.source.user_id:
-            raise ValueError("user_id must match source user_id")
-        return self
