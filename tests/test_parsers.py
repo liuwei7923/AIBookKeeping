@@ -1,5 +1,9 @@
 from bookkeeping_app.openai_service import build_category_review_input
-from bookkeeping_app.parsers import parse_csv_transactions, parse_transactions, sanitize_text
+from bookkeeping_app.parsers import (
+    parse_csv_transactions,
+    parse_transactions,
+    sanitize_text,
+)
 
 
 def test_sanitize_text_removes_control_characters() -> None:
@@ -25,9 +29,7 @@ def test_parse_csv_transactions_normalizes_common_columns() -> None:
 
 
 def test_parse_transactions_normalizes_amount_and_fields() -> None:
-    raw_text = (
-        '[{"date":"2026-03-01","amount":"-12.50","merchant":" Starbucks ","category":" Coffee "}]'
-    )
+    raw_text = '[{"date":"2026-03-01","amount":"-12.50","merchant":" Starbucks ","category":" Coffee "}]'
 
     transactions = parse_transactions(raw_text)
 
@@ -42,8 +44,12 @@ def test_parse_transactions_normalizes_amount_and_fields() -> None:
 
 
 def test_build_category_review_input_limits_history_examples() -> None:
-    transactions = [{"date": "2026-03-01", "amount": -5.0, "merchant": "Coffee", "category": "Food"}]
-    history = [{"merchant": f"Merchant {index}", "category": "Sample"} for index in range(30)]
+    transactions = [
+        {"date": "2026-03-01", "amount": -5.0, "merchant": "Coffee", "category": "Food"}
+    ]
+    history = [
+        {"merchant": f"Merchant {index}", "category": "Sample"} for index in range(30)
+    ]
 
     payload = build_category_review_input(transactions, history)
 

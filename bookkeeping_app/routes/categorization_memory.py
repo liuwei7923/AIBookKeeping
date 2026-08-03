@@ -7,7 +7,10 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
-from bookkeeping_app.memory import import_categorization_memory_csv, load_categorization_memory
+from bookkeeping_app.memory import (
+    import_categorization_memory_csv,
+    load_categorization_memory,
+)
 from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.uploads import read_csv_upload
 

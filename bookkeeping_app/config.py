@@ -13,5 +13,7 @@ MODEL_NAME = "gpt-4.1-mini"
 MAX_CATEGORY_CONTEXT_ITEMS = 20
 DATA_DIR = Path("data")
 CATEGORIZATION_MEMORY_PATH = Path(
-    os.getenv("CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json"))
+    os.getenv(
+        "CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json")
+    )
 )

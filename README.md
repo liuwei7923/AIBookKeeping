@@ -248,12 +248,28 @@ The API runs at `http://127.0.0.1:8000`.
 pytest
 ```
 
+Check linting and formatting locally with Ruff:
+
+```bash
+ruff check main.py bookkeeping_app scripts tests
+ruff format --check main.py bookkeeping_app scripts tests
+```
+
+Direct dependencies are declared in `requirements.in`, while
+`requirements.txt` locks the complete resolved dependency graph. Regenerate the
+lock after changing a direct dependency:
+
+```bash
+pip-compile requirements.in
+```
+
 ## Continuous Integration
 
-GitHub Actions runs Python compilation and the full test suite for every pull
-request and every push to `master`. The workflow does not require an OpenAI API
-key. Configure the `test` job as a required status check in the repository's
-branch protection settings.
+GitHub Actions runs Python compilation, the full test suite, Ruff linting, and
+Ruff formatting checks for every pull request and every push to `master`. The
+workflow does not require an OpenAI API key. Configure the `test` and `quality`
+jobs as required status checks in the repository's branch protection settings.
+Dependabot checks the Python and GitHub Actions dependencies weekly.
 
 ## Generate Dummy Transactions
 

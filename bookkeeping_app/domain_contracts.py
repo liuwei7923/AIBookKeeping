@@ -135,7 +135,9 @@ class CategorizationDecision(BaseModel):
                 raise ValueError("AI suggestion must contain only suggested_category")
         elif self.decision_type is DecisionType.AI_PROPOSED_NEW_CATEGORY:
             if not self.proposed_category or self.suggested_category:
-                raise ValueError("AI category proposal must contain only proposed_category")
+                raise ValueError(
+                    "AI category proposal must contain only proposed_category"
+                )
         elif self.suggested_category or self.proposed_category:
             raise ValueError("unresolved AI decision cannot contain a category")
         return self

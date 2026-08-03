@@ -7,14 +7,14 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from scripts.dummy_data import (
-    DummyTransactionDataset,
-    generate_dummy_transactions,
-)
 from bookkeeping_app.domain_contracts import (
     DecisionType,
     SourceTransaction,
     TransactionIdentityQuality,
+)
+from scripts.dummy_data import (
+    DummyTransactionDataset,
+    generate_dummy_transactions,
 )
 
 USER_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
