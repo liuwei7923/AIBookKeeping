@@ -92,7 +92,7 @@ when they should be handled consistently.
 
 Basic health check.
 
-### `POST /categorization-memory/import`
+### `POST /categorization-memory`
 
 Upload a labeled historical CSV and import it into local categorization memory.
 
@@ -142,7 +142,7 @@ Example response:
 
 This endpoint should not call OpenAI.
 
-### `POST /recategorize-transactions-csv`
+### `POST /transactions`
 
 Upload a new transaction CSV and return category suggestions for future transactions.
 
@@ -169,6 +169,22 @@ Expected response:
 ```
 
 This endpoint may call OpenAI, but only after retrieving a limited relevant subset of memory.
+
+### `GET /admin/openai-usage`
+
+Return the current OpenAI usage snapshot. Administrative routes are grouped
+under `/admin`, but the prefix alone is not access control; admin authentication
+and authorization are deferred.
+
+The FastAPI application composes focused route modules:
+
+```text
+bookkeeping_app/routes/
+  health.py
+  admin.py
+  categorization_memory.py
+  transactions.py
+```
 
 ## User Workflow
 

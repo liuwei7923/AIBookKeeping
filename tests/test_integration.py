@@ -64,7 +64,7 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
 
     with csv_path.open("rb") as file_handle:
         import_response = httpx.post(
-            f"{running_server}/categorization-memory/import",
+            f"{running_server}/categorization-memory",
             files={"file": ("short_transaction.csv", file_handle, "text/csv")},
             timeout=10.0,
         )

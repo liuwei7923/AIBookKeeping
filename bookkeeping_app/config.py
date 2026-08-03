@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_CSV_CONTENT_TYPES = {
     "text/csv",
     "application/csv",

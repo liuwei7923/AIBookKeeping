@@ -1,0 +1,31 @@
+"""Transaction collection routes."""
+
+import logging
+
+from fastapi import APIRouter, File, UploadFile
+from fastapi.responses import JSONResponse
+
+from bookkeeping_app.openai_service import review_transaction_categories
+from bookkeeping_app.parsers import parse_csv_transactions
+from bookkeeping_app.uploads import read_csv_upload
+
+logger = logging.getLogger("bookkeeping_app")
+router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+@router.post("")
+async def create_transactions(file: UploadFile = File(...)) -> JSONResponse:
+    csv_text = await read_csv_upload(file)
+    transactions = parse_csv_transactions(csv_text)
+    logger.info(
+        "Parsed transaction CSV endpoint=transactions filename=%s transactions=%s",
+        file.filename,
+        len(transactions),
+    )
+
+    reviewed_transactions = review_transaction_categories(transactions)
+    logger.info(
+        "Completed category review endpoint=transactions reviewed_transactions=%s",
+        len(reviewed_transactions),
+    )
+    return JSONResponse(content=reviewed_transactions)

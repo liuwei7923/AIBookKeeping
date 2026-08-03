@@ -1,19 +1,4 @@
-"""Prompt templates used for extraction and transaction recategorization."""
-
-SYSTEM_PROMPT = """You are a financial assistant.
-Extract transactions from images into structured JSON.
-Return ONLY valid JSON. No explanation.
-Ensure amount is a number, not string.
-If any field is unknown, use null.
-
-Return a JSON array. Each item must have this schema:
-{
-  "date": string | null,
-  "amount": number | null,
-  "merchant": string | null,
-  "category": string | null
-}
-"""
+"""Prompt templates used for transaction categorization."""
 
 CATEGORY_REVIEW_PROMPT = """You are a financial assistant.
 Review transaction categories and correct them when they are inaccurate.
