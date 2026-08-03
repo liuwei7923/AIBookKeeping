@@ -9,32 +9,29 @@ from bookkeeping_app.metrics import metrics
 client = TestClient(app)
 
 
+def test_openapi_exposes_only_the_supported_routes() -> None:
+    paths = app.openapi()["paths"]
+
+    assert {
+        (method.upper(), path)
+        for path, methods in paths.items()
+        for method in methods
+    } == {
+        ("GET", "/health"),
+        ("GET", "/admin/openai-usage"),
+        ("GET", "/categorization-memory"),
+        ("POST", "/categorization-memory"),
+        ("POST", "/transactions"),
+    }
+
+
 def test_health_endpoint() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_extract_transactions_csv_returns_normalized_transactions() -> None:
-    csv_bytes = b"date,amount,merchant,category\n2026-03-01,-12.50,Starbucks,Coffee\n"
-
-    response = client.post(
-        "/extract-transactions-csv",
-        files={"file": ("transactions.csv", csv_bytes, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == [
-        {
-            "date": "2026-03-01",
-            "amount": -12.5,
-            "merchant": "Starbucks",
-            "category": "Coffee",
-        }
-    ]
-
-
-def test_recategorize_transactions_csv_uses_review_service(monkeypatch) -> None:
+def test_create_transactions_uses_review_service(monkeypatch) -> None:
     def fake_review(transactions):
         assert transactions == [
             {
@@ -55,10 +52,13 @@ def test_recategorize_transactions_csv_uses_review_service(monkeypatch) -> None:
             }
         ]
 
-    monkeypatch.setattr("bookkeeping_app.api.review_transaction_categories", fake_review)
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.transactions.review_transaction_categories",
+        fake_review,
+    )
 
     response = client.post(
-        "/recategorize-transactions-csv",
+        "/transactions",
         files={
             "file": (
                 "transactions.csv",
@@ -72,16 +72,19 @@ def test_recategorize_transactions_csv_uses_review_service(monkeypatch) -> None:
     assert response.json()[0]["suggested_category"] == "Coffee"
 
 
-def test_openai_usage_endpoint() -> None:
+def test_admin_openai_usage_endpoint() -> None:
     metrics.openai_request_count = 3
-    response = client.get("/openai-usage")
+    response = client.get("/admin/openai-usage")
     assert response.status_code == 200
     assert response.json()["openai_request_count"] == 3
 
 
 def test_import_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
     memory_path = tmp_path / "categorization_memory.json"
-    monkeypatch.setattr("bookkeeping_app.api.MEMORY_PATH", memory_path)
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.categorization_memory.MEMORY_PATH",
+        memory_path,
+    )
 
     csv_bytes = (
         b"merchant,amount,category,statement,notes\n"
@@ -89,7 +92,7 @@ def test_import_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
     )
 
     response = client.post(
-        "/categorization-memory/import",
+        "/categorization-memory",
         files={"file": ("memory.csv", csv_bytes, "text/csv")},
     )
 
@@ -101,10 +104,13 @@ def test_import_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
 
 def test_get_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
     memory_path = tmp_path / "categorization_memory.json"
-    monkeypatch.setattr("bookkeeping_app.api.MEMORY_PATH", memory_path)
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.categorization_memory.MEMORY_PATH",
+        memory_path,
+    )
 
     client.post(
-        "/categorization-memory/import",
+        "/categorization-memory",
         files={
             "file": (
                 "memory.csv",
@@ -131,10 +137,13 @@ def test_get_categorization_memory_api(tmp_path: Path, monkeypatch) -> None:
 
 def test_get_categorization_memory_uses_public_field_names(tmp_path: Path, monkeypatch) -> None:
     memory_path = tmp_path / "categorization_memory.json"
-    monkeypatch.setattr("bookkeeping_app.api.MEMORY_PATH", memory_path)
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.categorization_memory.MEMORY_PATH",
+        memory_path,
+    )
 
     client.post(
-        "/categorization-memory/import",
+        "/categorization-memory",
         files={
             "file": (
                 "memory.csv",
@@ -162,3 +171,11 @@ def test_get_categorization_memory_uses_public_field_names(tmp_path: Path, monke
             "notes": None,
         }
     ]
+
+
+def test_legacy_routes_are_removed() -> None:
+    assert client.get("/openai-usage").status_code == 404
+    assert client.post("/categorization-memory/import").status_code == 404
+    assert client.post("/extract-transactions").status_code == 404
+    assert client.post("/extract-transactions-csv").status_code == 404
+    assert client.post("/recategorize-transactions-csv").status_code == 404

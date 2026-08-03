@@ -1,6 +1,5 @@
-"""OpenAI request helpers for extraction and memory-aware category review flows."""
+"""OpenAI request helpers for memory-aware category review flows."""
 
-import base64
 import json
 import logging
 import os
@@ -11,8 +10,8 @@ from openai import APIError, APIStatusError, OpenAI
 
 from bookkeeping_app.config import MAX_CATEGORY_CONTEXT_ITEMS, MODEL_NAME
 from bookkeeping_app.metrics import metrics
-from bookkeeping_app.parsers import parse_category_review, parse_transactions
-from bookkeeping_app.prompts import CATEGORY_REVIEW_PROMPT, SYSTEM_PROMPT
+from bookkeeping_app.parsers import parse_category_review
+from bookkeeping_app.prompts import CATEGORY_REVIEW_PROMPT
 
 logger = logging.getLogger("bookkeeping_app")
 
@@ -71,45 +70,6 @@ def build_category_review_input(
     )
 
 
-def extract_transactions_from_image(image_bytes: bytes, content_type: str) -> list[dict[str, Any]]:
-    base64_image = base64.b64encode(image_bytes).decode("utf-8")
-    image_url = f"data:{content_type};base64,{base64_image}"
-
-    try:
-        client = get_openai_client()
-        metrics.record_openai_request("extract-transactions")
-        response = client.responses.create(
-            model=MODEL_NAME,
-            input=[
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": SYSTEM_PROMPT}],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": "Extract all visible transactions from this image.",
-                        },
-                        {
-                            "type": "input_image",
-                            "image_url": image_url,
-                        },
-                    ],
-                },
-            ],
-        )
-    except Exception as exc:
-        raise_openai_http_error(exc)
-
-    output_text = getattr(response, "output_text", "").strip()
-    if not output_text:
-        raise HTTPException(status_code=502, detail="OpenAI returned an empty response")
-
-    return parse_transactions(output_text)
-
-
 def review_transaction_categories(
     transactions: list[dict[str, Any]],
     category_history: list[dict[str, Any]] | None = None,
@@ -119,7 +79,7 @@ def review_transaction_categories(
 
     try:
         client = get_openai_client()
-        metrics.record_openai_request("recategorize-transactions-csv")
+        metrics.record_openai_request("transactions")
         response = client.responses.create(
             model=MODEL_NAME,
             input=[

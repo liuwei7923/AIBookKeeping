@@ -83,7 +83,7 @@ transaction.
 ## Issue 3: Add API to import training dataset into categorization memory
 
 **Title**
-Add `POST /categorization-memory/import` for labeled history import
+Add `POST /categorization-memory` for labeled history import
 
 **Body**
 ### Goal
@@ -147,7 +147,7 @@ This is critical for trust and debugging.
 ## Issue 5: Use categorization memory to label future transactions
 
 **Title**
-Update `POST /recategorize-transactions-csv` to use relevant memory examples
+Update `POST /transactions` to use relevant memory examples
 
 **Body**
 ### Goal
