@@ -1,4 +1,22 @@
-"""Deterministic dummy transaction data for local UI development."""
+"""Generate deterministic transaction fixtures for manual judgment UI work.
+
+Run from the repository root::
+
+    python -m scripts.dummy_data --count 24 --seed 42 --output data/dummy_transactions.json
+
+The output is one ``DummyTransactionDataset`` JSON object containing paired
+``source_transactions`` and ``canonical_transactions`` arrays. Each canonical
+transaction embeds its corresponding source transaction.
+
+The same count and seed always produce the same merchant, amount, date, and
+direction values. Scenario placement is independent of the seed: every eight
+records cycle through unreviewed, AI suggestion, proposed category, unresolved,
+accepted AI, corrected AI, manual-only, and incomplete-input states.
+
+Call ``generate_dummy_transactions(count=..., seed=...)`` directly when models
+are more useful than a file. Generation is local, performs no filesystem writes,
+and does not call OpenAI; only the command-line adapter writes JSON.
+"""
 
 import argparse
 from collections.abc import Sequence
