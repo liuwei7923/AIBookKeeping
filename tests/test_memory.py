@@ -2,8 +2,8 @@ from pathlib import Path
 
 from bookkeeping_app.memory import (
     build_memory_item,
-    infer_direction,
     import_categorization_memory_csv,
+    infer_direction,
     load_categorization_memory,
     normalize_merchant,
     parse_memory_csv,

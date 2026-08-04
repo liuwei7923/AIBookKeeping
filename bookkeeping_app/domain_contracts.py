@@ -1,7 +1,8 @@
-"""Framework-independent transaction and categorization domain contracts."""
+"""Framework-independent user, transaction, and categorization contracts."""
 
 from decimal import Decimal
 from enum import StrEnum
+from uuid import UUID, uuid4
 
 from pydantic import (
     BaseModel,
@@ -11,6 +12,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+UserId = UUID
 
 
 def _require_non_blank(value: str, field_name: str) -> str:
@@ -43,11 +46,28 @@ class TransactionIdentityQuality(StrEnum):
     INSUFFICIENT = "insufficient"
 
 
+class User(BaseModel):
+    """A person with a stable identity inside the bookkeeping application."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UserId = Field(default_factory=uuid4)
+    display_name: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_blank(value, "display_name").strip()
+
+
 class SourceTransaction(BaseModel):
     """Transaction values preserved as received from a source."""
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
+    user_id: UserId
     transaction_id: str
     date: str | None = None
     merchant: str | None = None
@@ -115,7 +135,9 @@ class CategorizationDecision(BaseModel):
                 raise ValueError("AI suggestion must contain only suggested_category")
         elif self.decision_type is DecisionType.AI_PROPOSED_NEW_CATEGORY:
             if not self.proposed_category or self.suggested_category:
-                raise ValueError("AI category proposal must contain only proposed_category")
+                raise ValueError(
+                    "AI category proposal must contain only proposed_category"
+                )
         elif self.suggested_category or self.proposed_category:
             raise ValueError("unresolved AI decision cannot contain a category")
         return self

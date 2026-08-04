@@ -1,12 +1,20 @@
-# Bookkeeping Categorization
+# AI Bookkeeping
 
-This context describes how the application assigns, withholds, and reviews transaction categories. Its purpose is to keep bookkeeping decisions correct and auditable even when available evidence is incomplete.
+This context describes the people and financial records managed by the bookkeeping application, including how it assigns, withholds, and reviews transaction categories. Its purpose is to keep multi-user bookkeeping decisions correctly isolated, auditable, and conservative when available evidence is incomplete.
 
 ## Language
 
+**User**:
+A person with a stable identity inside the bookkeeping application. A User is independent of any particular login provider or mutable contact information.
+_Avoid_: Account, customer
+
+**Source Transaction**:
+A transaction preserved as received from an external source before identity and categorization processing.
+_Avoid_: Raw transaction
+
 **Canonical Transaction**:
-A transaction represented in the application's shared vocabulary while preserving its source values and normalized identity. Its identifier is unique within one recategorization request.
-_Avoid_: Parsed row, API transaction
+A processed transaction represented in the application's shared vocabulary while preserving its source values, ownership, and normalized identity. Its identifier is unique within one recategorization request.
+_Avoid_: Parsed row, API transaction, clean transaction
 
 **Categorization Decision**:
 The application's conclusion about a transaction's category, including the evidence and certainty supporting that conclusion.

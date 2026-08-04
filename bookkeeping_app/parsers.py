@@ -45,10 +45,14 @@ def parse_json_array(raw_text: str) -> list[dict[str, Any]]:
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="OpenAI response was not valid JSON") from exc
+        raise HTTPException(
+            status_code=502, detail="OpenAI response was not valid JSON"
+        ) from exc
 
     if not isinstance(data, list):
-        raise HTTPException(status_code=502, detail="OpenAI response was not a JSON array")
+        raise HTTPException(
+            status_code=502, detail="OpenAI response was not a JSON array"
+        )
 
     return [item for item in data if isinstance(item, dict)]
 
@@ -103,7 +107,9 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
         raise HTTPException(status_code=400, detail="Could not read CSV file") from exc
 
     if not reader.fieldnames:
-        raise HTTPException(status_code=400, detail="CSV file must include a header row")
+        raise HTTPException(
+            status_code=400, detail="CSV file must include a header row"
+        )
 
     transactions = []
     for row in reader:
@@ -112,11 +118,15 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
 
         transactions.append(
             {
-                "date": find_csv_value(row, ["date", "transaction date", "posted date"]),
+                "date": find_csv_value(
+                    row, ["date", "transaction date", "posted date"]
+                ),
                 "amount": normalize_amount(
                     find_csv_value(row, ["amount", "transaction amount", "value"])
                 ),
-                "merchant": find_csv_value(row, ["merchant", "description", "payee", "name"]),
+                "merchant": find_csv_value(
+                    row, ["merchant", "description", "payee", "name"]
+                ),
                 "category": find_csv_value(row, ["category"]),
             }
         )

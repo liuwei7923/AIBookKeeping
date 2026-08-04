@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_CSV_CONTENT_TYPES = {
     "text/csv",
     "application/csv",
@@ -14,5 +13,7 @@ MODEL_NAME = "gpt-4.1-mini"
 MAX_CATEGORY_CONTEXT_ITEMS = 20
 DATA_DIR = Path("data")
 CATEGORIZATION_MEMORY_PATH = Path(
-    os.getenv("CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json"))
+    os.getenv(
+        "CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json")
+    )
 )

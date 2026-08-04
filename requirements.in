@@ -1,0 +1,8 @@
+fastapi
+openai
+pip-tools
+pytest
+python-dotenv
+python-multipart
+ruff
+uvicorn[standard]

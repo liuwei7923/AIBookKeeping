@@ -1,9 +1,19 @@
-# Transaction Domain Contracts
+# Domain Contracts
 
-This reference is for developers implementing transaction ingestion,
-normalization, AI categorization, or manual review. The validated models live in
-`bookkeeping_app/domain_contracts.py` and do not depend on FastAPI or OpenAI SDK
-types.
+This reference is for developers implementing users, transaction ingestion,
+normalization, AI categorization, or manual review. The validated models live
+in `bookkeeping_app/domain_contracts.py` and do not depend on FastAPI or OpenAI
+SDK types.
+
+## User
+
+`User` represents a person inside the bookkeeping application. The application
+generates a UUIDv4 when `user_id` is omitted. An existing UUID may be supplied
+when restoring a user. `display_name` is optional, trimmed when provided, and
+must not be blank.
+
+Authentication identities, email addresses, credentials, status, and
+persistence are intentionally deferred until their workflows are defined.
 
 ## Lifecycle
 
@@ -29,6 +39,7 @@ content.
 
 | Field | Meaning |
 | --- | --- |
+| `user_id` | Required UUID of the user who owns the transaction. |
 | `transaction_id` | Non-blank identifier assigned to the source transaction. |
 | `date` | Date value supplied by the source, if present. |
 | `merchant` | Merchant text supplied by the source, if present. |
@@ -59,6 +70,10 @@ identity plus the latest AI and manual categorization state.
 The AI and manual categorizations may coexist. Manual review does not overwrite
 the AI decision, allowing later comparison between the suggestion and the
 category selected by the user.
+
+User IDs are UUIDs assigned to a `User`. `CanonicalTransaction`,
+`CategorizationDecision`, and `ManualCategorization` inherit ownership from the
+embedded source transaction rather than duplicating `user_id`.
 
 ## AI Categorization Decision
 

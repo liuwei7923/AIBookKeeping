@@ -15,6 +15,7 @@ Project guidance:
 - [Phase 1 domain contracts](docs/domain-contracts.md)
 - [Canonical phased specification](https://github.com/liuwei7923/AIBookKeeping/issues/11)
 - [Phase 1 implementation issue](https://github.com/liuwei7923/AIBookKeeping/issues/15)
+- [Repository agent guidance](AGENTS.md)
 
 ## Product Goal
 
@@ -258,7 +259,7 @@ Returns:
 
 Returns the configured model and in-process OpenAI request count.
 
-### `POST /categorization-memory/import`
+### `POST /categorization-memory`
 
 Imports trusted historical categorizations from a UTF-8 CSV.
 
@@ -329,7 +330,7 @@ curl -X POST \
   -F "file=@transactions.csv;type=text/csv"
 ```
 
-### `POST /recategorize-transactions-csv`
+### `POST /transactions`
 
 Current behavior:
 
@@ -372,6 +373,22 @@ structured transaction JSON.
 curl -X POST \
   http://127.0.0.1:8000/extract-transactions \
   -F "file=@bank-screenshot.png;type=image/png"
+```
+
+### `GET /admin/openai-usage`
+
+Returns the current OpenAI usage snapshot. Administrative routes are grouped
+under `/admin`, but the prefix alone is not access control; admin authentication
+and authorization are deferred.
+
+The FastAPI application composes focused route modules:
+
+```text
+bookkeeping_app/routes/
+  health.py
+  admin.py
+  categorization_memory.py
+  transactions.py
 ```
 
 ## Setup
@@ -432,6 +449,50 @@ http://127.0.0.1:8000/docs
 ```bash
 pytest
 ```
+
+Check linting and formatting locally with Ruff:
+
+```bash
+ruff check main.py bookkeeping_app scripts tests
+ruff format --check main.py bookkeeping_app scripts tests
+```
+
+Direct dependencies are declared in `requirements.in`, while
+`requirements.txt` locks the complete resolved dependency graph. Regenerate the
+lock after changing a direct dependency:
+
+```bash
+pip-compile requirements.in
+```
+
+## Continuous Integration
+
+GitHub Actions runs Python compilation, the full test suite, Ruff linting, and
+Ruff formatting checks for every pull request and every push to `master`. The
+workflow does not require an OpenAI API key. Configure the `test` and `quality`
+jobs as required status checks in the repository's branch protection settings.
+Dependabot checks the Python and GitHub Actions dependencies weekly.
+
+## Generate Dummy Transactions
+
+Generate deterministic source and canonical transactions for local manual
+judgment UI development:
+
+```bash
+python -m scripts.dummy_data \
+  --user-id 550e8400-e29b-41d4-a716-446655440000 \
+  --count 24 \
+  --seed 42 \
+  --output data/dummy_transactions.json
+```
+
+The UUID user ID is required and becomes the dataset owner. Every generated
+source transaction uses it, and canonical transactions inherit ownership from
+their embedded source rather than duplicating the field. The same user ID,
+count, and seed always produce the same JSON. Use at least eight transactions
+to include every supported manual judgment state. See
+[docs/dummy-transaction-data.md](docs/dummy-transaction-data.md) for the dataset
+shape and scenario details.
 
 Project verification:
 

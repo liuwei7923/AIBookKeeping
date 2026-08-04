@@ -1,6 +1,7 @@
 import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def running_server(tmp_path: Path):
 
     process = subprocess.Popen(
         [
-            str(Path(".venv/bin/python")),
+            sys.executable,
             "-m",
             "uvicorn",
             "main:app",
@@ -52,7 +53,9 @@ def running_server(tmp_path: Path):
     else:
         process.terminate()
         stdout, stderr = process.communicate(timeout=5)
-        raise RuntimeError(f"Server did not start.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+        raise RuntimeError(
+            f"Server did not start.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+        )
 
     process.terminate()
     process.wait(timeout=5)
@@ -64,7 +67,7 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
 
     with csv_path.open("rb") as file_handle:
         import_response = httpx.post(
-            f"{running_server}/categorization-memory/import",
+            f"{running_server}/categorization-memory",
             files={"file": ("short_transaction.csv", file_handle, "text/csv")},
             timeout=10.0,
         )
