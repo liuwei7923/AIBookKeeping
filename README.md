@@ -112,8 +112,8 @@ Focus modules:
 Phase 1 will:
 
 - normalize incoming transactions into one canonical shape
-- assign request-scoped transaction IDs
-- create optional fingerprints for duplicate detection
+- assign globally unique transaction IDs that remain stable after import
+- require deterministic fingerprints for canonical transaction duplicate detection
 - retrieve trusted memory by normalized merchant and transaction direction
 - resolve strong deterministic matches without OpenAI
 - preserve conflicting history for multi-category merchants
@@ -240,9 +240,11 @@ Current rules:
 - memory import and retrieval do not call OpenAI
 - AI suggestions are not added automatically
 
-Phase 1 will add optional transaction fingerprints and duplicate-aware evidence
-counting. A UUID will remain the record identity; the fingerprint will only
-detect repeated imports.
+Phase 1 requires deterministic transaction fingerprints and duplicate-aware
+evidence counting. A globally unique UUID remains the record identity; the
+fingerprint only detects repeated imports. Inputs without enough identity to
+produce a meaningful fingerprint remain Source Transactions and do not become
+Canonical Transactions.
 
 ## API
 

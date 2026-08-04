@@ -10,8 +10,8 @@ The application currently persists categorization memory as a JSON array of
 - legacy memory directions used `income` and `expense`; all transaction models
   now use `credit` and `debit`
 - memory records lack user ownership and canonical transaction identity
-- canonical fingerprints are optional, while the new invariant requires every
-  canonical transaction to have one
+- legacy canonical fingerprints were optional; the domain contract now requires
+  every canonical transaction to have one
 
 The agreed domain direction is that Categorization Memory is not a second kind
 of transaction. It is the collection of Canonical Transactions whose
@@ -59,7 +59,7 @@ categorization is trusted.
 
 ### Trusted categorization
 
-Replace the narrow `ManualCategorization` model with a trusted categorization
+The narrow `ManualCategorization` model is replaced by a trusted categorization
 that records how trust was established.
 
 ```python
@@ -96,7 +96,7 @@ application can later compare a suggestion with the user's final decision.
 
 ### Transaction identity
 
-`transaction_id` should be a globally unique UUID that remains stable for the
+`transaction_id` is a globally unique UUID that remains stable for the
 life of the imported transaction. It identifies a record. The fingerprint is a
 deterministic value derived from normalized transaction facts and detects
 equivalent transactions across repeated imports.
@@ -298,12 +298,12 @@ criteria no longer contradict the design.
 
 ### Step 1: Evolve domain contracts
 
-- Add `TrustedCategorizationSource` and `TrustedCategorization`.
-- Replace `manual_categorization` with `trusted_categorization`.
-- Make `fingerprint` required on Canonical Transaction.
-- Make transaction IDs globally unique and stable.
-- Decide whether `INSUFFICIENT` remains a Source ingestion result or is removed
-  from `TransactionIdentityQuality`.
+- Add `TrustedCategorizationSource` and `TrustedCategorization`. (Complete)
+- Replace `manual_categorization` with `trusted_categorization`. (Complete)
+- Make `fingerprint` required on Canonical Transaction. (Complete)
+- Make transaction IDs globally unique and stable. (Complete)
+- Remove `INSUFFICIENT` from `TransactionIdentityQuality`; insufficient sources
+  do not produce Canonical Transactions. (Complete)
 - Update domain and dummy-data tests.
 
 Exit criteria: invalid Canonical Transactions cannot be constructed, imported
@@ -401,8 +401,8 @@ duplicate count, conflict count, rejected count, and elapsed time.
 
 ## Risks
 
-- Changing request-scoped transaction IDs to persistent IDs affects existing
-  tests and the Phase 1 issue contract.
+- The change from request-scoped transaction IDs to persistent IDs affects the
+  Phase 1 issue contract and downstream integrations.
 - The minimum fingerprint fields may reject transaction sources the current CSV
   parser accepts.
 - Replacing manual categorization terminology affects dummy fixtures and future
@@ -422,9 +422,7 @@ duplicate count, conflict count, rejected count, and elapsed time.
    to construct a Canonical Transaction?
 3. Should authorized category replacement mutate the existing transaction or
    append a revision while marking the old categorization inactive?
-4. Should `TransactionIdentityQuality.INSUFFICIENT` be removed or retained only
-   for a separate ingestion-result model?
-5. Should `supporting_memory_ids` be renamed to
+4. Should `supporting_memory_ids` be renamed to
    `supporting_transaction_ids` after transaction IDs become persistent?
-6. Should the Phase 1 FileMemoryStore support multiple writer processes, or is a
+5. Should the Phase 1 FileMemoryStore support multiple writer processes, or is a
    documented single-writer constraint sufficient?

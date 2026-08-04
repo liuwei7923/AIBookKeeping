@@ -43,7 +43,15 @@ class TransactionIdentityQuality(StrEnum):
 
     COMPLETE = "complete"
     PARTIAL = "partial"
-    INSUFFICIENT = "insufficient"
+
+
+class TrustedCategorizationSource(StrEnum):
+    """How a categorization became trusted by the application."""
+
+    IMPORTED_HISTORY = "imported_history"
+    MANUAL_CLASSIFICATION = "manual_classification"
+    CONFIRMED_AI_SUGGESTION = "confirmed_ai_suggestion"
+    CORRECTED_AI_SUGGESTION = "corrected_ai_suggestion"
 
 
 class User(BaseModel):
@@ -68,25 +76,21 @@ class SourceTransaction(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     user_id: UserId
-    transaction_id: str
+    transaction_id: UUID = Field(default_factory=uuid4)
     date: str | None = None
     merchant: str | None = None
     statement: str | None = None
     amount: Decimal | None = None
     original_category: str | None = None
 
-    @field_validator("transaction_id")
-    @classmethod
-    def transaction_id_must_not_be_blank(cls, value: str) -> str:
-        return _require_non_blank(value, "transaction_id")
 
-
-class ManualCategorization(BaseModel):
-    """A category explicitly selected by a user and therefore trusted."""
+class TrustedCategorization(BaseModel):
+    """A category trusted through import or an explicit user decision."""
 
     model_config = ConfigDict(extra="forbid")
 
     category: str
+    source: TrustedCategorizationSource
     note: str | None = None
 
     @field_validator("category")
@@ -153,6 +157,6 @@ class CanonicalTransaction(BaseModel):
     normalized_statement: str | None = None
     direction: TransactionDirection
     identity_quality: TransactionIdentityQuality
-    fingerprint: str | None = Field(default=None, min_length=1)
+    fingerprint: str = Field(min_length=1)
     ai_categorization: CategorizationDecision | None = None
-    manual_categorization: ManualCategorization | None = None
+    trusted_categorization: TrustedCategorization | None = None

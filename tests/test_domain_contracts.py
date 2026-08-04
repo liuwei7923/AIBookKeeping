@@ -8,14 +8,16 @@ from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
     CategorizationDecision,
     DecisionType,
-    ManualCategorization,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
+    TrustedCategorization,
+    TrustedCategorizationSource,
     User,
 )
 
 USER_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
+TRANSACTION_ID = UUID("660e8400-e29b-41d4-a716-446655440000")
 
 
 def test_user_gets_a_generated_uuid() -> None:
@@ -40,7 +42,7 @@ def test_user_rejects_blank_display_name() -> None:
 def test_source_transaction_preserves_unprocessed_source_values() -> None:
     transaction = SourceTransaction(
         user_id=USER_ID,
-        transaction_id="txn-1",
+        transaction_id=TRANSACTION_ID,
         date="2026-03-24",
         merchant=" ELECTRIFY AMERICA ",
         statement="ELECTRIFY AMERICA 65RESTON VA",
@@ -49,48 +51,62 @@ def test_source_transaction_preserves_unprocessed_source_values() -> None:
     )
 
     assert transaction.user_id == USER_ID
-    assert transaction.transaction_id == "txn-1"
+    assert transaction.transaction_id == TRANSACTION_ID
     assert transaction.merchant == " ELECTRIFY AMERICA "
     assert transaction.statement == "ELECTRIFY AMERICA 65RESTON VA"
     assert transaction.amount == Decimal("0.1000000000000000001")
     assert transaction.original_category == "Gas"
 
 
-def test_source_transaction_rejects_blank_identifier() -> None:
+def test_source_transaction_generates_identifier_when_omitted() -> None:
+    transaction = SourceTransaction(user_id=USER_ID)
+
+    assert isinstance(transaction.transaction_id, UUID)
+
+
+def test_source_transaction_rejects_invalid_identifier() -> None:
     with pytest.raises(ValidationError):
         SourceTransaction(user_id=USER_ID, transaction_id=" ")
 
 
 def test_source_transaction_requires_user_id() -> None:
     with pytest.raises(ValidationError):
-        SourceTransaction(transaction_id="txn-1")
+        SourceTransaction(transaction_id=TRANSACTION_ID)
 
 
 @pytest.mark.parametrize("user_id", ["", "user-1", "not-a-uuid"])
 def test_source_transaction_rejects_invalid_user_id(user_id: str) -> None:
     with pytest.raises(ValidationError):
-        SourceTransaction(user_id=user_id, transaction_id="txn-1")
+        SourceTransaction(user_id=user_id, transaction_id=TRANSACTION_ID)
 
 
 def test_source_transaction_parses_uuid_string() -> None:
-    transaction = SourceTransaction(user_id=str(USER_ID), transaction_id="txn-1")
+    transaction = SourceTransaction(
+        user_id=str(USER_ID), transaction_id=str(TRANSACTION_ID)
+    )
 
     assert transaction.user_id == USER_ID
+    assert transaction.transaction_id == TRANSACTION_ID
 
 
-def test_manual_categorization_records_a_trusted_user_category() -> None:
-    categorization = ManualCategorization(
+def test_trusted_categorization_records_category_source_and_note() -> None:
+    categorization = TrustedCategorization(
         category="Electric Vehicle Charging",
+        source=TrustedCategorizationSource.MANUAL_CLASSIFICATION,
         note="Confirmed from charging receipt.",
     )
 
     assert categorization.category == "Electric Vehicle Charging"
+    assert categorization.source is TrustedCategorizationSource.MANUAL_CLASSIFICATION
     assert categorization.note == "Confirmed from charging receipt."
 
 
-def test_manual_categorization_rejects_blank_category() -> None:
+def test_trusted_categorization_rejects_blank_category() -> None:
     with pytest.raises(ValidationError):
-        ManualCategorization(category=" ")
+        TrustedCategorization(
+            category=" ",
+            source=TrustedCategorizationSource.MANUAL_CLASSIFICATION,
+        )
 
 
 def test_ai_suggestion_records_category_reason_and_supporting_memory() -> None:
@@ -174,7 +190,7 @@ def test_ai_decision_rejects_blank_supporting_memory_id() -> None:
 def test_canonical_transaction_keeps_source_identity_and_both_categorizations() -> None:
     source = SourceTransaction(
         user_id=USER_ID,
-        transaction_id="txn-1",
+        transaction_id=TRANSACTION_ID,
         merchant=" ELECTRIFY AMERICA ",
         statement="ELECTRIFY AMERICA 65RESTON VA",
         amount=-7.0,
@@ -186,8 +202,9 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
         suggested_category="Electric Vehicle Charging",
         reason="The transaction describes an EV charging session.",
     )
-    manual_categorization = ManualCategorization(
+    trusted_categorization = TrustedCategorization(
         category="Vehicle Charging",
+        source=TrustedCategorizationSource.CORRECTED_AI_SUGGESTION,
         note="User corrected the category name.",
     )
 
@@ -199,7 +216,7 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
         identity_quality=TransactionIdentityQuality.COMPLETE,
         fingerprint="sha256:abc123",
         ai_categorization=ai_decision,
-        manual_categorization=manual_categorization,
+        trusted_categorization=trusted_categorization,
     )
 
     assert transaction.source.user_id == USER_ID
@@ -207,4 +224,15 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
     assert transaction.normalized_merchant == "electrify america"
     assert transaction.fingerprint == "sha256:abc123"
     assert transaction.ai_categorization == ai_decision
-    assert transaction.manual_categorization == manual_categorization
+    assert transaction.trusted_categorization == trusted_categorization
+
+
+def test_canonical_transaction_requires_fingerprint() -> None:
+    source = SourceTransaction(user_id=USER_ID, transaction_id=TRANSACTION_ID)
+
+    with pytest.raises(ValidationError):
+        CanonicalTransaction(
+            source=source,
+            direction=TransactionDirection.DEBIT,
+            identity_quality=TransactionIdentityQuality.PARTIAL,
+        )

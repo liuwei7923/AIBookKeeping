@@ -1,8 +1,8 @@
 # Dummy Transaction Data
 
-The deterministic dummy data generator provides paired `SourceTransaction` and
-`CanonicalTransaction` records for local UI development. It does not call
-OpenAI, read user data, or require Faker.
+The deterministic dummy data generator provides `SourceTransaction` records and
+their successfully constructed `CanonicalTransaction` results for local UI
+development. It does not call OpenAI, read user data, or require Faker.
 
 ## Python Interface
 
@@ -27,12 +27,13 @@ with two arrays:
 | `source_transactions` | Original transaction-level values before processing. |
 | `canonical_transactions` | Processed records with identity and categorization state. |
 
-The arrays have the requested length and matching records use the same embedded
-`SourceTransaction`. The dataset validates that every source record, including
-each source embedded in a canonical record, carries the same `user_id` as its
-top-level owner. Canonical records do not duplicate the source owner. The same
-`count` and `seed` produce byte-equivalent model JSON. A different seed changes
-transaction content. `count` must be positive.
+The source array has the requested length. A source without enough identity to
+produce a fingerprint has no canonical counterpart. Matching records use the
+same embedded `SourceTransaction`. The dataset validates that every source
+record, including each source embedded in a canonical record, carries the same
+`user_id` as its top-level owner. Canonical records do not duplicate the source
+owner. The same `count` and `seed` produce byte-equivalent model JSON. A
+different seed changes transaction content. `count` must be positive.
 
 ## Command Line
 
@@ -64,7 +65,7 @@ python -m scripts.dummy_data \
 The generator cycles through eight scenarios in a fixed order. Generate at
 least eight records to include all states in one dataset.
 
-| State | AI categorization | Manual categorization | Identity |
+| State | AI categorization | Trusted categorization | Identity |
 | --- | --- | --- | --- |
 | Unreviewed | None | None | Complete |
 | AI suggestion | Suggested category | None | Complete |
@@ -73,7 +74,7 @@ least eight records to include all states in one dataset.
 | Accepted AI | Suggested category | Same category | Complete |
 | Corrected AI | Suggested category | Different category | Complete |
 | Manual only | None | Selected category | Complete |
-| Incomplete input | None | None | Insufficient; no fingerprint |
+| Incomplete input | None | None | Source retained; no canonical transaction |
 
 The seed controls merchant, amount, direction, and date values. Scenario
 placement is based on record position so UI state coverage remains predictable
