@@ -231,7 +231,7 @@ def test_get_categorization_memory_uses_public_field_names(
             "merchant": "Electrify America",
             "statement": "ELECTRIFY AMERICA 65RESTON VA",
             "amount": -7.0,
-            "direction": "expense",
+            "direction": "debit",
             "original_category": None,
             "category": "Electric Vehicle Charging",
             "notes": None,

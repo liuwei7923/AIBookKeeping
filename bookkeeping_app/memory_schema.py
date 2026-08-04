@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bookkeeping_app.domain_contracts import UserId
+from bookkeeping_app.domain_contracts import TransactionDirection, UserId
 
 
 def utc_now_iso() -> str:
@@ -22,7 +22,7 @@ class CategorizationMemoryItem(BaseModel):
     statement: str | None = None
     normalized_merchant: str
     amount: float | None = None
-    direction: str | None = None
+    direction: TransactionDirection | None = None
     original_category: str | None = None
     corrected_category: str
     source: str = "imported_labeled_history"

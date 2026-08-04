@@ -18,7 +18,7 @@ A transaction preserved as received from an external source before identity and 
 _Avoid_: Raw transaction
 
 **Canonical Transaction**:
-A processed transaction represented in the application's shared vocabulary while preserving its source values, ownership, and normalized identity. Its identifier is unique within one recategorization request.
+A processed transaction represented in the application's shared vocabulary while preserving its source values, ownership, and normalized identity. Its identifier is globally unique and remains stable throughout the transaction's lifetime.
 _Avoid_: Parsed row, API transaction, clean transaction
 
 **Categorization Decision**:
@@ -52,6 +52,10 @@ _Avoid_: Fraud, transaction anomaly
 **Trusted Categorization**:
 A category confirmed by the user or imported from a source explicitly designated as trustworthy. AI suggestions are not trusted categorizations until confirmed.
 _Avoid_: High-confidence suggestion
+
+**Categorization Memory**:
+The collection of Canonical Transactions that have a Trusted Categorization and may therefore serve as evidence for future Categorization Decisions.
+_Avoid_: Training data, AI memory, categorization-memory item
 
 **False Categorization**:
 An assigned category that differs from the category the user confirms as correct. This is the primary failure the product is designed to minimize.

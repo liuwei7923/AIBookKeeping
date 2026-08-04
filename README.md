@@ -219,7 +219,7 @@ Each item represents one trusted historical decision:
   "statement": "ELECTRIFY AMERICA 65RESTON VA",
   "normalized_merchant": "electrify america",
   "amount": -7.0,
-  "direction": "expense",
+  "direction": "debit",
   "original_category": null,
   "corrected_category": "Electric Vehicle Charging",
   "source": "imported_labeled_history",
@@ -313,7 +313,7 @@ Example response:
     "merchant": "Electrify America",
     "statement": "ELECTRIFY AMERICA 65RESTON VA",
     "amount": -7.0,
-    "direction": "expense",
+    "direction": "debit",
     "original_category": null,
     "category": "Electric Vehicle Charging",
     "notes": "EV charging merchant"
