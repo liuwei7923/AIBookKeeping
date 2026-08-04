@@ -1,127 +1,306 @@
-# AI Bookkeeping App MVP
+# AI Bookkeeping App
 
-CSV-first FastAPI backend for improving transaction categories using your own historical labeling decisions.
+CSV-first, multi-user AI bookkeeping MVP for improving transaction
+categorization with trusted historical decisions and selective OpenAI review.
 
-Project workflow rules live in [AGENTS.md](/Users/w_liu/FiniancialMind/app/AGENTS.md) and the detailed process is documented in [docs/development-lifecycle.md](/Users/w_liu/FiniancialMind/app/docs/development-lifecycle.md).
+The project is being developed iteratively. The backend already supports CSV
+parsing, OpenAI-assisted recategorization, and file-backed categorization
+memory. The next implementation milestone connects those pieces into a
+memory-first Recategorization Engine.
+
+Project guidance:
+
+- [Development lifecycle](docs/development-lifecycle.md)
+- [Bookkeeping categorization language](CONTEXT.md)
+- [Phase 1 domain contracts](docs/domain-contracts.md)
+- [Canonical phased specification](https://github.com/liuwei7923/AIBookKeeping/issues/11)
+- [Phase 1 implementation issue](https://github.com/liuwei7923/AIBookKeeping/issues/15)
 
 ## Product Goal
 
-The app is built around one core idea:
+The product is built around one learning loop:
 
-1. import your historically labeled transactions
-2. store them as local categorization memory
-3. use that memory to help label future transaction CSVs
+1. Import trusted historical categorizations.
+2. Store each distinct transaction as categorization memory.
+3. Reuse strong historical evidence for future transactions.
+4. Ask OpenAI only when deterministic evidence is insufficient.
+5. Let the user review uncertain results and corrections.
+6. Promote explicit user decisions back into trusted memory.
 
-This is not a fine-tuning project yet. The current design is:
+This is a retrieval and review system, not a fine-tuning project.
 
-- local memory from trusted historical labels
-- retrieval of relevant prior examples
-- OpenAI used only when needed to improve categorization
-- local JSON storage for categorization memory
+## Correctness First
 
-## High-Level Design
+A false categorization is more harmful than an unknown categorization. The
+application therefore optimizes categorization precision before coverage:
 
-The app has three user-facing workflows:
+- assign a category only when evidence passes a conservative threshold
+- prefer an unknown categorization over a weakly supported guess
+- avoid OpenAI when trusted memory already provides a strong answer
+- mark every AI-generated suggestion as needing review
+- never treat an AI suggestion as trusted until the user confirms it
+- preserve the evidence and reason behind each categorization decision
 
-1. Import categorization memory
-   Upload a labeled historical CSV and store trusted category examples locally.
+The core domain terms are:
 
-2. Inspect categorization memory
-   Retrieve the stored memory in a human-readable format so you can verify what the system knows.
+| Term | Meaning |
+| --- | --- |
+| Categorization Decision | The application's conclusion about a transaction category, including its evidence and certainty. |
+| Unknown Categorization | A deliberate decision to withhold a category because evidence is missing, weak, or conflicting. |
+| Needs Review | A decision that should be inspected and confirmed by the user. |
+| Trusted Categorization | A category imported from a trusted source or explicitly confirmed by the user. |
+| False Categorization | An assigned category that differs from the category the user confirms as correct. |
+| Categorization Anomaly | An assigned category that conflicts with historical weekly, monthly, or quarterly patterns. |
 
-3. Recategorize future transactions
-   Upload a new CSV, retrieve relevant historical examples, and return suggested categories for the new transactions.
+See [CONTEXT.md](CONTEXT.md) for the canonical language.
 
-The long-term intent is:
+## Current Implementation
 
-- use exact or strong merchant matches as cheap, rule-like memory
-- use OpenAI only when memory alone is not enough
-- keep token usage low by sending only the most relevant examples
+The repository currently includes:
+
+- FastAPI application and multipart file uploads
+- bank screenshot extraction through OpenAI vision
+- deterministic CSV parsing and normalization
+- OpenAI-assisted CSV recategorization
+- local JSON categorization-memory storage
+- categorization-memory import and inspection endpoints
+- OpenAI request counting and request logging
+- parser, memory, API, and live-server tests
+
+The important current limitation is:
+
+> `POST /recategorize-transactions-csv` still sends every parsed transaction
+> directly to OpenAI. It does not yet retrieve or apply categorization memory.
+
+Phase 1 addresses this gap.
+
+## Target Architecture
+
+```mermaid
+flowchart LR
+    API["FastAPI adapter"] --> ENGINE["Recategorization Engine"]
+    ENGINE --> INGESTION["Transaction Ingestion"]
+    ENGINE --> MEMORY["Categorization Memory"]
+    ENGINE --> REVIEWER["OpenAI Reviewer"]
+    ENGINE --> REVIEW["Review Queue"]
+    ENGINE --> METRICS["Metrics"]
+    MEMORY --> MEMORY_FILE["categorization_memory.json"]
+    REVIEW --> REVIEW_FILE["review_queue.json"]
+```
+
+The Recategorization Engine is the primary domain module. It will hide memory
+retrieval, deterministic decision rules, AI routing, batching, confidence
+assignment, and result ordering behind one batch-oriented interface.
+
+The Review Queue is shown as part of the target architecture but is deferred to
+Phase 2.
+
+## Iterative Roadmap
+
+### Phase 1: Memory-First Recategorization MVP
+
+[Phase 1 issue](https://github.com/liuwei7923/AIBookKeeping/issues/15)
+
+Focus modules:
+
+- Recategorization Engine
+- Transaction Ingestion
+- Categorization Memory
+- OpenAI Reviewer
+- Metrics
+
+Phase 1 will:
+
+- normalize incoming transactions into one canonical shape
+- assign request-scoped transaction IDs
+- create optional fingerprints for duplicate detection
+- retrieve trusted memory by normalized merchant and transaction direction
+- resolve strong deterministic matches without OpenAI
+- preserve conflicting history for multi-category merchants
+- send only unresolved transactions to OpenAI
+- include only relevant memory examples and aggregate category counts
+- request structured model output keyed by transaction ID
+- return an ordered batch response with decision provenance
+- stop before OpenAI when the AI-review approval threshold is exceeded
+
+Phase 1 configurable defaults:
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| Merchant consensus threshold | 2 distinct transactions | Minimum unanimous evidence for a merchant-level local decision |
+| Memory candidates per AI transaction | 5 | Maximum detailed examples sent to OpenAI |
+| AI transactions per request | 25 | Maximum unresolved transactions in one model request |
+| AI-review approval threshold | 50 | More than this number pauses before any OpenAI request |
+
+Deterministic decisions require the same normalized merchant and direction.
+An exact normalized-statement match is the strongest evidence. Merchant-level
+consensus requires the configured number of distinct transactions to agree on
+one category.
+
+Weak, missing, or conflicting evidence remains an Unknown Categorization.
+OpenAI may suggest a known category or propose a new category, but every model
+result remains Needs Review.
+
+### Phase 2: Review Infrastructure
+
+[Phase 2 retry issue](https://github.com/liuwei7923/AIBookKeeping/issues/14)
+
+Focus module:
+
+- Review Queue
+
+Phase 2 will add:
+
+- persistent review batches and review items
+- incomplete-import tracking outside trusted memory
+- batch-scoped approval for more than 50 AI-required transactions
+- process-safe resumption of an approved batch
+- an auditable retry flow for unresolved OpenAI work
+
+The exact approval and retry interfaces are intentionally deferred until this
+phase.
+
+### Phase 3: Human Confirmation
+
+[Phase 3 confirmation UI issue](https://github.com/liuwei7923/AIBookKeeping/issues/13)
+
+Focus modules:
+
+- Confirmation UI
+- review-item resolution
+- trusted-memory promotion
+
+Phase 3 will let users:
+
+- inspect the original transaction and suggested category
+- see conflicting and supporting categorization memory
+- confirm or correct individual decisions
+- explicitly select items for bulk confirmation
+- promote only confirmed or corrected decisions into trusted memory
+
+A blind confirm-all action is out of scope.
+
+### Phase 4: Quality Expansion
+
+[Phase 4 automatic-promotion evaluation](https://github.com/liuwei7923/AIBookKeeping/issues/12)
+
+Focus modules:
+
+- Category Reference
+- Categorization Anomaly detection
+- quality metrics and audit history
+
+Phase 4 will add:
+
+- canonical category names, definitions, aliases, and merchant patterns
+- weekly, monthly, and quarterly categorization-anomaly detection
+- precision, false-categorization, override, unknown, and review-volume metrics
+- evaluation of richer retrieval only when deterministic retrieval is inadequate
+- evaluation of controlled automatic promotion only after accuracy is measured
+
+Automatic promotion is not currently authorized.
 
 ## Categorization Memory
 
-Categorization memory is the local knowledge base for this app.
+Categorization memory is the local knowledge base of Trusted Categorizations.
+The current store is:
 
-Each memory item represents a trusted historical labeling example, such as:
+```text
+data/categorization_memory.json
+```
+
+Each item represents one trusted historical decision:
 
 ```json
 {
+  "id": "23d81053-8281-4f31-94eb-b2bc02753ae7",
+  "date": "2026-03-24",
   "merchant": "Electrify America",
   "statement": "ELECTRIFY AMERICA 65RESTON VA",
+  "normalized_merchant": "electrify america",
   "amount": -7.0,
-  "category": "Electric Vehicle Charging",
-  "notes": "EV charging merchant"
+  "direction": "expense",
+  "original_category": null,
+  "corrected_category": "Electric Vehicle Charging",
+  "source": "imported_labeled_history",
+  "notes": "EV charging merchant",
+  "created_at": "2026-03-24T18:00:00+00:00",
+  "updated_at": "2026-03-24T18:00:00+00:00",
+  "confidence": 1.0,
+  "usage_count": 0,
+  "last_matched_at": null
 }
 ```
 
-Important design rules:
+Current rules:
 
-- `category` is the human-readable output label returned by the API
-- `original_category` is optional because historical data may not include it
-- `statement` can preserve the raw bank statement description when available
-- memory should come from trusted labeled history or explicit manual overrides
-- not every AI suggestion should automatically become memory
+- imported memory must include a merchant and final category
+- `original_category` is optional
+- `statement` preserves the raw bank description when available
+- memory import and retrieval do not call OpenAI
+- AI suggestions are not added automatically
 
-The repository now includes the first version of this storage as:
+Phase 1 will add optional transaction fingerprints and duplicate-aware evidence
+counting. A UUID will remain the record identity; the fingerprint will only
+detect repeated imports.
 
-- `data/categorization_memory.json`
-
-## Category Reference
-
-The app will also maintain a dedicated category reference file so categories stay consistent over time.
-
-That reference should define:
-
-- canonical category names
-- category definitions
-- aliases
-- simple merchant patterns
-- example merchants
-
-This prevents drift like:
-
-- `Transportation`
-- `Auto & Transport`
-- `Taxi & Ride Shares`
-
-when they should be handled consistently.
-
-## API Design
+## API
 
 ### `GET /health`
 
-Basic health check.
+Returns:
+
+```json
+{"status": "ok"}
+```
+
+### `GET /openai-usage`
+
+Returns the configured model and in-process OpenAI request count.
 
 ### `POST /categorization-memory/import`
 
-Upload a labeled historical CSV and import it into local categorization memory.
+Imports trusted historical categorizations from a UTF-8 CSV.
 
-Expected CSV shape:
+Required columns:
 
-- required:
-  - `merchant`
-  - `amount`
-  - `category`
-- optional:
-  - `date`
-  - `statement` or `original statement`
-  - `original_category`
-  - `notes`
+- `merchant`
+- `category` or `corrected_category`
 
-Expected response:
+Optional columns:
+
+- `amount`
+- `date`
+- `statement` or `original statement`
+- `original_category`
+- `notes`
+
+Current response:
 
 ```json
 {
   "imported": 120,
-  "skipped": 3
+  "skipped": 0
 }
 ```
 
-This endpoint should not call OpenAI.
+This endpoint does not call OpenAI.
+
+Example:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/categorization-memory/import \
+  -F "file=@historical-transactions.csv;type=text/csv"
+```
 
 ### `GET /categorization-memory`
 
-Return stored categorization memory in a human-readable JSON format.
+Returns a human-readable view of stored categorization memory.
+
+```bash
+curl http://127.0.0.1:8000/categorization-memory
+```
 
 Example response:
 
@@ -140,20 +319,31 @@ Example response:
 ]
 ```
 
-This endpoint should not call OpenAI.
+### `POST /extract-transactions-csv`
+
+Parses a transaction CSV locally without calling OpenAI.
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/extract-transactions-csv \
+  -F "file=@transactions.csv;type=text/csv"
+```
 
 ### `POST /recategorize-transactions-csv`
 
-Upload a new transaction CSV and return category suggestions for future transactions.
+Current behavior:
 
-Expected input CSV fields:
+- parses the uploaded CSV
+- sends every parsed transaction to OpenAI
+- returns a JSON array of category suggestions
 
-- `merchant`
-- `amount`
-- optional `date`
-- optional `category`
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/recategorize-transactions-csv \
+  -F "file=@transactions.csv;type=text/csv"
+```
 
-Expected response:
+Current response shape:
 
 ```json
 [
@@ -163,40 +353,39 @@ Expected response:
     "merchant": "Electrify America",
     "original_category": "Gas",
     "suggested_category": "Electric Vehicle Charging",
-    "reason": "Matches prior trusted labeling for the same merchant."
+    "reason": "The merchant is an electric vehicle charging provider."
   }
 ]
 ```
 
-This endpoint may call OpenAI, but only after retrieving a limited relevant subset of memory.
+Phase 1 intentionally changes this endpoint to a batch response after adding
+memory-first deterministic decisions and bounded AI review. The target contract
+is defined in the
+[Phase 1 issue](https://github.com/liuwei7923/AIBookKeeping/issues/15).
 
-## User Workflow
+### `POST /extract-transactions`
 
-A typical workflow should look like this:
+Sends a JPEG, PNG, or WEBP bank screenshot to OpenAI vision and returns
+structured transaction JSON.
 
-1. Import historical labeled CSV data into categorization memory.
-2. Inspect the stored memory to verify it looks correct.
-3. Upload a new transaction CSV.
-4. Receive corrected or improved suggested categories.
-
-## Cost Control Strategy
-
-The app should keep OpenAI usage low by default.
-
-Planned controls:
-
-- do not use OpenAI for memory import
-- do not use OpenAI for memory retrieval
-- retrieve only the top relevant memory examples
-- cap context size
-- prefer direct memory matches before calling the model
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/extract-transactions \
+  -F "file=@bank-screenshot.png;type=image/png"
+```
 
 ## Setup
 
 Create and activate a virtual environment:
 
-```fish
+```bash
 python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Fish shell:
+
+```fish
 source .venv/bin/activate.fish
 ```
 
@@ -206,19 +395,25 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create your environment file:
+Create the environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Add your OpenAI API key to `.env`:
+Add an OpenAI API key:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-## Run the Server
+Optional memory path override:
+
+```env
+CATEGORIZATION_MEMORY_PATH=data/categorization_memory.json
+```
+
+## Run Locally
 
 ```bash
 uvicorn main:app --reload
@@ -226,25 +421,44 @@ uvicorn main:app --reload
 
 The API runs at `http://127.0.0.1:8000`.
 
+Interactive FastAPI documentation is available at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
 ## Run Tests
 
 ```bash
 pytest
 ```
 
-## Current Status
+Project verification:
 
-The repository already includes:
+```bash
+python3 -m py_compile main.py bookkeeping_app/*.py tests/*.py
+.venv/bin/python -m pytest -q
+```
 
-- CSV parsing
-- recategorization with OpenAI
-- request logging
-- local categorization memory schema and JSON storage foundation
-- categorization memory import and retrieval APIs
-- parser, API, and live integration tests
+## Privacy
 
-The next major build steps are:
+Transactions and screenshots sent to OpenAI-backed endpoints leave the local
+process and are transmitted to OpenAI. Memory import, memory inspection, and
+CSV extraction remain local.
 
-- memory-aware recategorization using relevant prior examples
-- dedicated category reference definitions and patterns
-- token-budget controls for memory-aware prompts
+The design minimizes external data by resolving strong matches locally and
+sending only the relevant fields and memory examples for unresolved
+transactions.
+
+## Out of Scope
+
+The current implementation does not yet include:
+
+- a database
+- authentication and complete multi-user account isolation
+- the simple frontend planned for the MVP
+- background jobs
+- agent orchestration
+- streaming
+- fine-tuning
+- general ledger, invoicing, payroll, tax filing, or autonomous accounting-system posting
