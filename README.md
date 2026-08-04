@@ -60,7 +60,6 @@ See [CONTEXT.md](CONTEXT.md) for the canonical language.
 The repository currently includes:
 
 - FastAPI application and multipart file uploads
-- bank screenshot extraction through OpenAI vision
 - deterministic CSV parsing and normalization
 - OpenAI-assisted CSV recategorization
 - local JSON categorization-memory storage
@@ -70,7 +69,7 @@ The repository currently includes:
 
 The important current limitation is:
 
-> `POST /recategorize-transactions-csv` still sends every parsed transaction
+> `POST /transactions` still sends every parsed transaction
 > directly to OpenAI. It does not yet retrieve or apply categorization memory.
 
 Phase 1 addresses this gap.
@@ -255,9 +254,11 @@ Returns:
 {"status": "ok"}
 ```
 
-### `GET /openai-usage`
+### `GET /admin/openai-usage`
 
-Returns the configured model and in-process OpenAI request count.
+Returns the configured model and in-process OpenAI request count. The `/admin`
+prefix organizes operational routes but does not currently provide access
+control.
 
 ### `POST /categorization-memory`
 
@@ -291,7 +292,7 @@ Example:
 
 ```bash
 curl -X POST \
-  http://127.0.0.1:8000/categorization-memory/import \
+  http://127.0.0.1:8000/categorization-memory \
   -F "file=@historical-transactions.csv;type=text/csv"
 ```
 
@@ -320,16 +321,6 @@ Example response:
 ]
 ```
 
-### `POST /extract-transactions-csv`
-
-Parses a transaction CSV locally without calling OpenAI.
-
-```bash
-curl -X POST \
-  http://127.0.0.1:8000/extract-transactions-csv \
-  -F "file=@transactions.csv;type=text/csv"
-```
-
 ### `POST /transactions`
 
 Current behavior:
@@ -340,7 +331,7 @@ Current behavior:
 
 ```bash
 curl -X POST \
-  http://127.0.0.1:8000/recategorize-transactions-csv \
+  http://127.0.0.1:8000/transactions \
   -F "file=@transactions.csv;type=text/csv"
 ```
 
@@ -364,23 +355,6 @@ memory-first deterministic decisions and bounded AI review. The target contract
 is defined in the
 [Phase 1 issue](https://github.com/liuwei7923/AIBookKeeping/issues/15).
 
-### `POST /extract-transactions`
-
-Sends a JPEG, PNG, or WEBP bank screenshot to OpenAI vision and returns
-structured transaction JSON.
-
-```bash
-curl -X POST \
-  http://127.0.0.1:8000/extract-transactions \
-  -F "file=@bank-screenshot.png;type=image/png"
-```
-
-### `GET /admin/openai-usage`
-
-Returns the current OpenAI usage snapshot. Administrative routes are grouped
-under `/admin`, but the prefix alone is not access control; admin authentication
-and authorization are deferred.
-
 The FastAPI application composes focused route modules:
 
 ```text
@@ -390,6 +364,33 @@ bookkeeping_app/routes/
   categorization_memory.py
   transactions.py
 ```
+
+## User Workflow
+
+A typical workflow is:
+
+1. Import a trusted historical CSV through `POST /categorization-memory`.
+2. Inspect the stored decisions through `GET /categorization-memory`.
+3. Upload a new transaction CSV through `POST /transactions`.
+4. Review the returned category suggestions and reasons.
+
+The current API does not yet persist user confirmations or promote reviewed
+suggestions into trusted memory.
+
+## Cost Control Strategy
+
+Categorization-memory import and retrieval are deterministic and do not call
+OpenAI. The current `POST /transactions` implementation sends every parsed
+transaction batch to OpenAI and records the request in the in-process usage
+counter.
+
+Phase 1 will reduce external calls and token usage by:
+
+- resolving strong trusted-memory matches before calling OpenAI
+- sending only unresolved transactions for AI review
+- limiting detailed memory examples and context size
+- batching unresolved transactions within configured limits
+- pausing before any request when the AI-review approval threshold is exceeded
 
 ## Setup
 
@@ -503,9 +504,9 @@ python3 -m py_compile main.py bookkeeping_app/*.py tests/*.py
 
 ## Privacy
 
-Transactions and screenshots sent to OpenAI-backed endpoints leave the local
-process and are transmitted to OpenAI. Memory import, memory inspection, and
-CSV extraction remain local.
+Transactions submitted to `POST /transactions` leave the local process and are
+transmitted to OpenAI. Categorization-memory import and inspection remain
+local.
 
 The design minimizes external data by resolving strong matches locally and
 sending only the relevant fields and memory examples for unresolved
