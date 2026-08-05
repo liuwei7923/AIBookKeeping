@@ -431,6 +431,25 @@ Optional memory path override:
 CATEGORIZATION_MEMORY_PATH=data/categorization_memory.json
 ```
 
+The checked-in development-user catalog lives at
+`config/development_users.json`. Each developer keeps their selected default in
+their ignored local `.env`; `.env.example` selects Wei Liu as an example. Change
+`DEV_USER_ID` locally to use Jia Zhang or another development UUID. Never commit
+the local `.env` file.
+
+In development, user-owned APIs use `DEV_USER_ID` when the request omits the
+temporary `X-User-Id` header, so the usual local request needs no UUID. To test
+as a different user without editing `.env`, override it per request:
+
+```bash
+curl -H "X-User-Id: 0c050ed3-d41b-468c-9c29-e9e6da905c04" \
+  http://127.0.0.1:8000/categorization-memory
+```
+
+The header is a development seam, not production authentication. Outside
+development, requests to user-owned APIs must supply an explicit user ID until
+verified authentication replaces this interface.
+
 ## Run Locally
 
 ```bash
