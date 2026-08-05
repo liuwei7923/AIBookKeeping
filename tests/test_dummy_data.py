@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from bookkeeping_app.domain_contracts import (
     DecisionType,
     SourceTransaction,
-    TransactionIdentityQuality,
 )
 from scripts.dummy_data import (
     DummyTransactionDataset,
@@ -43,13 +42,12 @@ def test_dummy_dataset_round_trips_through_json() -> None:
     restored = DummyTransactionDataset.model_validate_json(dataset.model_dump_json())
 
     assert restored == dataset
+    sources_by_id = {
+        source.transaction_id: source for source in restored.source_transactions
+    }
     assert all(
-        canonical.source == source
-        for source, canonical in zip(
-            restored.source_transactions,
-            restored.canonical_transactions,
-            strict=True,
-        )
+        canonical.source == sources_by_id[canonical.source.transaction_id]
+        for canonical in restored.canonical_transactions
     )
     assert all(
         isinstance(source.amount, Decimal) for source in restored.source_transactions
@@ -77,28 +75,27 @@ def test_dummy_dataset_rejects_transaction_owned_by_another_user() -> None:
     with pytest.raises(ValidationError, match="must match dataset user_id"):
         DummyTransactionDataset(
             user_id=USER_ID,
-            source_transactions=[
-                SourceTransaction(user_id=other_user_id, transaction_id="txn-1")
-            ],
+            source_transactions=[SourceTransaction(user_id=other_user_id)],
             canonical_transactions=[],
         )
 
 
 def test_dummy_dataset_covers_manual_judgment_ui_states() -> None:
-    transactions = generate_dummy_transactions(
+    dataset = generate_dummy_transactions(
         user_id=USER_ID,
         count=8,
         seed=42,
-    ).canonical_transactions
+    )
+    transactions = dataset.canonical_transactions
 
     assert any(
-        item.ai_categorization is None and item.manual_categorization is None
+        item.ai_categorization is None and item.trusted_categorization is None
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
         and item.ai_categorization.decision_type is DecisionType.AI_SUGGESTION
-        and item.manual_categorization is None
+        and item.trusted_categorization is None
         for item in transactions
     )
     assert any(
@@ -114,30 +111,30 @@ def test_dummy_dataset_covers_manual_judgment_ui_states() -> None:
     )
     assert any(
         item.ai_categorization is not None
-        and item.manual_categorization is not None
+        and item.trusted_categorization is not None
         and item.ai_categorization.suggested_category
-        == item.manual_categorization.category
+        == item.trusted_categorization.category
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
         and item.ai_categorization.suggested_category is not None
-        and item.manual_categorization is not None
+        and item.trusted_categorization is not None
         and item.ai_categorization.suggested_category
-        != item.manual_categorization.category
+        != item.trusted_categorization.category
         for item in transactions
     )
     assert any(
-        item.ai_categorization is None and item.manual_categorization is not None
+        item.ai_categorization is None and item.trusted_categorization is not None
         for item in transactions
     )
+    assert all(item.fingerprint for item in transactions)
     assert any(
-        item.identity_quality is TransactionIdentityQuality.INSUFFICIENT
-        and item.source.merchant is None
-        and item.source.statement is None
-        and item.fingerprint is None
-        for item in transactions
+        source.merchant is None and source.statement is None
+        for source in dataset.source_transactions
     )
+    assert len(dataset.source_transactions) == 8
+    assert len(dataset.canonical_transactions) == 7
 
 
 def test_dummy_data_cli_writes_a_valid_dataset(tmp_path: Path) -> None:
@@ -166,5 +163,5 @@ def test_dummy_data_cli_writes_a_valid_dataset(tmp_path: Path) -> None:
     assert output_path.exists()
     dataset = DummyTransactionDataset.model_validate_json(output_path.read_text())
     assert len(dataset.source_transactions) == 8
-    assert len(dataset.canonical_transactions) == 8
+    assert len(dataset.canonical_transactions) == 7
     assert {item.user_id for item in dataset.source_transactions} == {USER_ID}

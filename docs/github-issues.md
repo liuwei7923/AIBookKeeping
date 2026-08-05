@@ -62,7 +62,7 @@ transaction.
   "merchant": "Electrify America",
   "normalized_merchant": "electrify america",
   "amount": -7.0,
-  "direction": "expense",
+  "direction": "debit",
   "original_category": "Gas",
   "corrected_category": "Electric Vehicle Charging",
   "source": "manual_override",

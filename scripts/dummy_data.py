@@ -4,9 +4,10 @@ Run from the repository root::
 
     python -m scripts.dummy_data --user-id 550e8400-e29b-41d4-a716-446655440000 --count 24 --seed 42 --output data/dummy_transactions.json
 
-The output is one ``DummyTransactionDataset`` JSON object containing paired
-``source_transactions`` and ``canonical_transactions`` arrays. Each canonical
-transaction embeds its corresponding source transaction.
+The output is one ``DummyTransactionDataset`` JSON object containing
+``source_transactions`` and successfully constructed ``canonical_transactions``
+arrays. Each canonical transaction embeds its corresponding source transaction;
+identity-insufficient sources have no canonical counterpart.
 
 The same count and seed always produce the same merchant, amount, date, and
 direction values. Scenario placement is independent of the seed: every eight
@@ -26,6 +27,7 @@ from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from random import Random
+from uuid import uuid5
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -33,10 +35,11 @@ from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
     CategorizationDecision,
     DecisionType,
-    ManualCategorization,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
+    TrustedCategorization,
+    TrustedCategorizationSource,
     UserId,
 )
 
@@ -80,7 +83,7 @@ MERCHANTS = (
 
 
 class DummyTransactionDataset(BaseModel):
-    """Paired source and canonical transactions generated for development."""
+    """Source transactions and their successful canonical results."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -102,7 +105,7 @@ class DummyTransactionDataset(BaseModel):
 def _build_categorizations(
     index: int,
     suggested_category: str,
-) -> tuple[CategorizationDecision | None, ManualCategorization | None]:
+) -> tuple[CategorizationDecision | None, TrustedCategorization | None]:
     scenario = index % 8
     decision_id = f"decision-{index + 1:04d}"
     memory_ids = [f"memory-{index + 1:04d}"]
@@ -147,8 +150,9 @@ def _build_categorizations(
                 reason="AI matched the merchant to a known category.",
                 supporting_memory_ids=memory_ids,
             ),
-            ManualCategorization(
+            TrustedCategorization(
                 category=suggested_category,
+                source=TrustedCategorizationSource.CONFIRMED_AI_SUGGESTION,
                 note="User accepted the AI suggestion.",
             ),
         )
@@ -161,14 +165,16 @@ def _build_categorizations(
                 reason="AI matched the merchant to a known category.",
                 supporting_memory_ids=memory_ids,
             ),
-            ManualCategorization(
+            TrustedCategorization(
                 category="Business Expense",
+                source=TrustedCategorizationSource.CORRECTED_AI_SUGGESTION,
                 note="User corrected the AI suggestion.",
             ),
         )
     if scenario == 6:
-        return None, ManualCategorization(
+        return None, TrustedCategorization(
             category=suggested_category,
+            source=TrustedCategorizationSource.MANUAL_CLASSIFICATION,
             note="User categorized this transaction without AI assistance.",
         )
     return None, None
@@ -202,7 +208,7 @@ def generate_dummy_transactions(
         amount = Decimal(rng.randint(199, 25_000)) / Decimal("100")
         if rng.choice((True, False)):
             amount = -amount
-        transaction_id = f"txn-{index + 1:04d}"
+        transaction_id = uuid5(user_id, f"dummy:{seed}:{index}")
         transaction_date = date(2026, 1, 1) + timedelta(days=rng.randint(0, 180))
         source = SourceTransaction(
             user_id=user_id,
@@ -213,35 +219,29 @@ def generate_dummy_transactions(
             amount=amount,
             original_category=None if is_incomplete else original_category,
         )
-        ai_categorization, manual_categorization = _build_categorizations(
-            index,
-            suggested_category,
+        source_transactions.append(source)
+        if is_incomplete:
+            continue
+
+        ai_categorization, trusted_categorization = _build_categorizations(
+            index, suggested_category
         )
-        fingerprint = None
-        if not is_incomplete:
-            fingerprint_input = (
-                f"{source.date}|{normalized_merchant}|{statement.lower()}|{amount}"
-            )
-            fingerprint = f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
+        fingerprint_input = f"{user_id}|{source.date}|{normalized_merchant}|{statement.lower()}|{amount}"
+        fingerprint = f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
         canonical = CanonicalTransaction(
             source=source,
-            normalized_merchant=None if is_incomplete else normalized_merchant,
-            normalized_statement=None if is_incomplete else statement.lower(),
+            normalized_merchant=normalized_merchant,
+            normalized_statement=statement.lower(),
             direction=(
                 TransactionDirection.CREDIT
                 if amount >= 0
                 else TransactionDirection.DEBIT
             ),
-            identity_quality=(
-                TransactionIdentityQuality.INSUFFICIENT
-                if is_incomplete
-                else TransactionIdentityQuality.COMPLETE
-            ),
+            identity_quality=TransactionIdentityQuality.COMPLETE,
             fingerprint=fingerprint,
             ai_categorization=ai_categorization,
-            manual_categorization=manual_categorization,
+            trusted_categorization=trusted_categorization,
         )
-        source_transactions.append(source)
         canonical_transactions.append(canonical)
 
     return DummyTransactionDataset(

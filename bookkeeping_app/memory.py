@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
-from bookkeeping_app.domain_contracts import UserId
+from bookkeeping_app.domain_contracts import TransactionDirection, UserId
 from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.parsers import normalize_amount, sanitize_text
 
@@ -26,10 +26,10 @@ def normalize_merchant(value: str | None) -> str | None:
     return collapsed or None
 
 
-def infer_direction(amount: float | None) -> str | None:
+def infer_direction(amount: float | None) -> TransactionDirection | None:
     if amount is None:
         return None
-    return "income" if amount >= 0 else "expense"
+    return TransactionDirection.CREDIT if amount >= 0 else TransactionDirection.DEBIT
 
 
 def build_memory_item(
@@ -42,6 +42,8 @@ def build_memory_item(
     statement: str | None = None,
     original_category: str | None = None,
     notes: str | None = None,
+    # Legacy memory-item provenance. TrustedCategorizationSource replaces this
+    # once the memory routes migrate to CanonicalTransaction persistence.
     source: str = "imported_labeled_history",
 ) -> CategorizationMemoryItem:
     cleaned_merchant = sanitize_text(merchant)

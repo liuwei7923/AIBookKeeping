@@ -20,8 +20,8 @@ def test_normalize_merchant_removes_noise() -> None:
 
 
 def test_infer_direction_uses_amount_sign() -> None:
-    assert infer_direction(-10.0) == "expense"
-    assert infer_direction(25.0) == "income"
+    assert infer_direction(-10.0) == "debit"
+    assert infer_direction(25.0) == "credit"
     assert infer_direction(None) is None
 
 
@@ -39,7 +39,7 @@ def test_build_memory_item_supports_optional_original_category() -> None:
     assert item.corrected_category == "Electric Vehicle Charging"
     assert item.statement == "ELECTRIFY AMERICA 65RESTON VA"
     assert item.normalized_merchant == "electrify america"
-    assert item.direction == "expense"
+    assert item.direction == "debit"
 
 
 def test_load_and_save_categorization_memory_round_trip(tmp_path: Path) -> None:

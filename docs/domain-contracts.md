@@ -24,7 +24,7 @@ SourceTransaction
         v
 CanonicalTransaction
         |-- ai_categorization: CategorizationDecision | None
-        `-- manual_categorization: ManualCategorization | None
+        `-- trusted_categorization: TrustedCategorization | None
 ```
 
 `SourceTransaction` and `CanonicalTransaction` are separate models. If
@@ -40,7 +40,7 @@ content.
 | Field | Meaning |
 | --- | --- |
 | `user_id` | Required UUID of the user who owns the transaction. |
-| `transaction_id` | Non-blank identifier assigned to the source transaction. |
+| `transaction_id` | Globally unique UUID that remains stable for the transaction lifetime. |
 | `date` | Date value supplied by the source, if present. |
 | `merchant` | Merchant text supplied by the source, if present. |
 | `statement` | Statement or description supplied by the source, if present. |
@@ -61,19 +61,23 @@ identity plus the latest AI and manual categorization state.
 | `source` | The source transaction from which this record was produced. |
 | `normalized_merchant` | Merchant identity produced by normalization. |
 | `normalized_statement` | Statement identity produced by normalization. |
-| `direction` | `debit`, `credit`, or `unknown`. |
-| `identity_quality` | `complete`, `partial`, or `insufficient`. |
-| `fingerprint` | Optional stable identity used for duplicate detection. |
+| `direction` | `debit` or `credit`; an amount is required before canonicalization. |
+| `identity_quality` | `complete` or `partial`. |
+| `fingerprint` | Required stable identity used for duplicate detection. |
 | `ai_categorization` | Optional AI decision details. |
-| `manual_categorization` | Optional trusted category selected by the user. |
+| `trusted_categorization` | Optional trusted category and the source of that trust. |
 
-The AI and manual categorizations may coexist. Manual review does not overwrite
-the AI decision, allowing later comparison between the suggestion and the
-category selected by the user.
+The AI and trusted categorizations may coexist. A trusted categorization does
+not overwrite the AI decision, allowing later comparison between the suggestion
+and the category accepted by the application.
 
 User IDs are UUIDs assigned to a `User`. `CanonicalTransaction`,
-`CategorizationDecision`, and `ManualCategorization` inherit ownership from the
+`CategorizationDecision`, and `TrustedCategorization` inherit ownership from the
 embedded source transaction rather than duplicating `user_id`.
+
+If the source identity is insufficient to generate a meaningful fingerprint,
+the Source Transaction remains available but no Canonical Transaction is
+constructed.
 
 ## AI Categorization Decision
 
@@ -92,13 +96,14 @@ Each decision has a non-blank `decision_id` and `reason`. It may cite
 
 An AI decision never becomes trusted automatically. If the user accepts the AI
 suggestion, the application records the same category in
-`manual_categorization`.
+`trusted_categorization` with source `confirmed_ai_suggestion`.
 
-## Manual Categorization
+## Trusted Categorization
 
-`ManualCategorization` contains a non-blank category explicitly selected by the
-user and an optional note. Its presence means manual review has occurred; its
-absence means the transaction has not received a manual judgment.
+`TrustedCategorization` contains a non-blank category, an optional note, and the
+source through which trust was established: imported history, manual
+classification, a confirmed AI suggestion, or a corrected AI suggestion. Its
+presence makes the Canonical Transaction eligible for Categorization Memory.
 
 ## Deferred Contracts
 
