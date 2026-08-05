@@ -9,11 +9,11 @@ from fastapi.responses import JSONResponse
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
 from bookkeeping_app.domain_contracts import UserId
-from bookkeeping_app.memory import (
+from bookkeeping_app.memory.legacy import (
+    CategorizationMemoryItem,
     import_categorization_memory_csv,
     load_categorization_memory,
 )
-from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.request_identity import request_user_id
 from bookkeeping_app.uploads import read_csv_upload
 

@@ -1,18 +1,59 @@
-"""Helpers for normalizing, constructing, loading, and saving categorization memory."""
+"""Legacy CSV memory flow retained until HTTP routes adopt ``MemoryStore``.
+
+New domain code must use the Memory Store interface. These helpers preserve the
+current public HTTP behavior without inventing an implicit user identity.
+"""
 
 import csv
 import json
 import re
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
 from bookkeeping_app.domain_contracts import TransactionDirection, UserId
-from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.parsers import normalize_amount, sanitize_text
 
 MULTISPACE_PATTERN = re.compile(r"\s+")
 PUNCTUATION_PATTERN = re.compile(r"[^a-z0-9\s]")
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+class CategorizationMemoryItem(BaseModel):
+    """Deprecated flat persistence model used only by the current HTTP routes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UserId
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    date: str | None = None
+    merchant: str
+    statement: str | None = None
+    normalized_merchant: str
+    amount: float | None = None
+    direction: TransactionDirection | None = None
+    original_category: str | None = None
+    corrected_category: str
+    source: str = Field(
+        default="imported_labeled_history",
+        description=(
+            "Legacy memory-item provenance; replaced by "
+            "CanonicalTransaction.trusted_categorization.source"
+        ),
+    )
+    notes: str | None = None
+    created_at: str = Field(default_factory=_utc_now_iso)
+    updated_at: str = Field(default_factory=_utc_now_iso)
+    confidence: float = 1.0
+    usage_count: int = 0
+    last_matched_at: str | None = None
 
 
 def normalize_merchant(value: str | None) -> str | None:
@@ -52,12 +93,11 @@ def build_memory_item(
 
     if cleaned_merchant is None:
         raise ValueError("merchant is required")
-
     if cleaned_category is None:
         raise ValueError("corrected_category is required")
+    assert normalized_merchant is not None
 
     normalized_amount = normalize_amount(amount)
-
     return CategorizationMemoryItem(
         user_id=user_id,
         date=sanitize_text(date),
@@ -81,10 +121,6 @@ def parse_memory_csv(
     if not reader.fieldnames:
         raise ValueError("CSV file must include a header row")
 
-    # TODO: Consider mapping currently ignored CSV fields such as Account,
-    # Tags, and Owner into the memory schema once we
-    # define how they should influence retrieval, merchant normalization,
-    # and category decisions.
     items: list[CategorizationMemoryItem] = []
     for row in reader:
         if not row:
@@ -94,7 +130,6 @@ def parse_memory_csv(
         merchant = find_memory_csv_value(
             row, ["merchant", "description", "payee", "name"]
         )
-
         if merchant is None or category is None:
             continue
 
@@ -116,7 +151,6 @@ def parse_memory_csv(
                 notes=find_memory_csv_value(row, ["notes"]),
             )
         )
-
     return items
 
 
@@ -145,15 +179,15 @@ def import_categorization_memory_csv(
     }
 
 
-def resolve_memory_path(path: Path | None = None) -> Path:
+def _resolve_memory_path(path: Path | None = None) -> Path:
     return path or CATEGORIZATION_MEMORY_PATH
 
 
-def ensure_memory_file(path: Path | None = None) -> None:
-    path = resolve_memory_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_text("[]", encoding="utf-8")
+def _ensure_memory_file(path: Path | None = None) -> None:
+    resolved = _resolve_memory_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    if not resolved.exists():
+        resolved.write_text("[]", encoding="utf-8")
 
 
 def load_categorization_memory(
@@ -170,9 +204,9 @@ def load_categorization_memory(
 def _load_all_categorization_memory(
     path: Path | None = None,
 ) -> list[CategorizationMemoryItem]:
-    path = resolve_memory_path(path)
-    ensure_memory_file(path)
-    raw_items = json.loads(path.read_text(encoding="utf-8"))
+    resolved = _resolve_memory_path(path)
+    _ensure_memory_file(resolved)
+    raw_items = json.loads(resolved.read_text(encoding="utf-8"))
     return [CategorizationMemoryItem.model_validate(item) for item in raw_items]
 
 
@@ -180,7 +214,7 @@ def save_categorization_memory(
     items: list[CategorizationMemoryItem],
     path: Path | None = None,
 ) -> None:
-    path = resolve_memory_path(path)
-    ensure_memory_file(path)
+    resolved = _resolve_memory_path(path)
+    _ensure_memory_file(resolved)
     payload = [item.model_dump(mode="json") for item in items]
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    resolved.write_text(json.dumps(payload, indent=2), encoding="utf-8")

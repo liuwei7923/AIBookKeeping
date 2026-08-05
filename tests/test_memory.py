@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import UUID
 
-from bookkeeping_app.memory import (
+from bookkeeping_app.memory.legacy import (
     build_memory_item,
     import_categorization_memory_csv,
     infer_direction,

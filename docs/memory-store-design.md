@@ -116,6 +116,23 @@ random, request-derived, or nullable fingerprint.
 
 ## Memory Store interface
 
+The implementation is organized as one package:
+
+```text
+bookkeeping_app/memory/
+  __init__.py       # supported public imports
+  contracts.py      # MemoryStore interface and request/result models
+  file_store.py     # JSON file-backed adapter
+  in_memory.py      # contract-test and engine-test adapter
+  sql_store.py      # declared SQL adapter; implementation deferred
+  _operations.py    # shared deterministic adapter behavior
+  legacy.py         # temporary current-route compatibility layer
+```
+
+The old top-level `memory.py` and `memory_schema.py` modules have been removed.
+The compatibility layer is intentionally not exported from the package; only
+the existing routes and their legacy tests may import it directly.
+
 ```python
 class MemoryStore(Protocol):
     def record_trusted(
@@ -249,11 +266,14 @@ New CanonicalTransaction
 
 ### DatabaseMemoryStore
 
-- Implements the same interface with transactions and indexed queries.
-- Uses a uniqueness constraint compatible with `(user_id, fingerprint)`.
-- Does not require callers to join transaction and memory tables.
-- Its physical schema may be one table or several; that decision is hidden by
-  the adapter.
+- `SqlMemoryStore` declares the same interface but intentionally raises
+  `NotImplementedError` until a database and schema are selected.
+- The eventual adapter will use transactions and indexed queries.
+- It will use a uniqueness constraint compatible with
+  `(user_id, fingerprint)`.
+- It will not require callers to join transaction and memory tables.
+- Its physical schema may be one table or several; that decision will remain
+  hidden by the adapter.
 
 ### InMemoryMemoryStore
 
@@ -323,20 +343,19 @@ Exit criteria: the revised acceptance coverage for #18 passes.
 
 ### Step 3: Define the Memory Store seam test-first
 
-- Add the protocol, query, command, page, and result contracts.
-- Write reusable Memory Store contract tests.
-- Implement `InMemoryMemoryStore` as the first adapter.
+- Add the protocol, query, command, page, and result contracts. (Complete)
+- Write reusable Memory Store contract tests. (Complete)
+- Implement `InMemoryMemoryStore` as the first adapter. (Complete)
 - Cover user isolation, atomic batches, duplicates, conflicts, authorized
-  replacement, pagination, and relevant lookup.
+  replacement, pagination, and relevant lookup. (Complete)
 
 Exit criteria: all observable Memory Store behavior is captured through its
 public interface.
 
 ### Step 4: Implement FileMemoryStore
 
-- Replace flat `CategorizationMemoryItem` persistence with Canonical
-  Transaction persistence.
-- Use atomic file replacement and safe decoding.
+- Add Canonical Transaction persistence to `FileMemoryStore`. (Complete)
+- Use atomic file replacement and safe decoding. (Complete)
 - Add an explicit empty/legacy schema check.
 - Move CSV parsing and canonicalization outside the adapter.
 - Update the memory HTTP routes to receive the store through dependency
