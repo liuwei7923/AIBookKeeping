@@ -13,7 +13,7 @@ Before making meaningful changes in this repo:
 Current product focus:
 
 - local categorization memory
-- memory import and retrieval APIs
+- bank-statement intake, review, and memory retrieval APIs
 - memory-aware recategorization
 - category consistency and token-cost control
 - simple frontend work needed to make the MVP usable end to end

@@ -50,7 +50,7 @@ An assigned category that is inconsistent with the transaction's historical patt
 _Avoid_: Fraud, transaction anomaly
 
 **Trusted Categorization**:
-A category confirmed by the user or imported from a source explicitly designated as trustworthy. AI suggestions are not trusted categorizations until confirmed.
+A category explicitly selected or confirmed by the user during transaction review. Bank-statement categories and AI suggestions are not trusted until the user reviews them.
 _Avoid_: High-confidence suggestion
 
 **Categorization Memory**:

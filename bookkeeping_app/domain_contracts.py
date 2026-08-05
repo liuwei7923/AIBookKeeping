@@ -47,7 +47,6 @@ class TransactionIdentityQuality(StrEnum):
 class TrustedCategorizationSource(StrEnum):
     """How a categorization became trusted by the application."""
 
-    IMPORTED_HISTORY = "imported_history"
     MANUAL_CLASSIFICATION = "manual_classification"
     CONFIRMED_AI_SUGGESTION = "confirmed_ai_suggestion"
     CORRECTED_AI_SUGGESTION = "corrected_ai_suggestion"
@@ -84,7 +83,7 @@ class SourceTransaction(BaseModel):
 
 
 class TrustedCategorization(BaseModel):
-    """A category trusted through import or an explicit user decision."""
+    """A category trusted through an explicit user decision."""
 
     model_config = ConfigDict(extra="forbid")
 

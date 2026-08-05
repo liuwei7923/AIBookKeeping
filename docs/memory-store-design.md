@@ -22,8 +22,7 @@ categorization is trusted.
 ## Goals
 
 - Use `CanonicalTransaction` as the only normalized transaction model.
-- Represent imported and user-confirmed categories uniformly as trusted
-  categorizations.
+- Represent user-confirmed categories as trusted categorizations.
 - Require every Canonical Transaction to have a deterministic fingerprint.
 - Introduce a small `MemoryStore` interface that supports file-backed,
   database-backed, and in-memory adapters.
@@ -66,7 +65,6 @@ that records how trust was established.
 
 ```python
 class TrustedCategorizationSource(StrEnum):
-    IMPORTED_HISTORY = "imported_history"
     MANUAL_CLASSIFICATION = "manual_classification"
     CONFIRMED_AI_SUGGESTION = "confirmed_ai_suggestion"
     CORRECTED_AI_SUGGESTION = "corrected_ai_suggestion"
@@ -126,12 +124,11 @@ bookkeeping_app/memory/
   in_memory.py      # contract-test and engine-test adapter
   sql_store.py      # declared SQL adapter; implementation deferred
   _operations.py    # shared deterministic adapter behavior
-  legacy.py         # temporary current-route compatibility layer
 ```
 
 The old top-level `memory.py` and `memory_schema.py` modules have been removed.
-The compatibility layer is intentionally not exported from the package; only
-the existing routes and their legacy tests may import it directly.
+The legacy memory implementation has also been removed; routes use the public
+`MemoryStore` interface directly.
 
 ```python
 class MemoryStore(Protocol):
@@ -239,13 +236,13 @@ database primary keys, or full fingerprint sets.
 ## Data flow
 
 ```text
-CSV row
+Bank-statement CSV row
   -> SourceTransaction
   -> canonical ingestion and fingerprinting
   -> CanonicalTransaction
-  -> trusted import or explicit user decision
+  -> review and explicit user decision
   -> CanonicalTransaction.trusted_categorization
-  -> MemoryStore.record_trusted
+  -> MemoryStore.record_trusted (called by the review workflow)
 
 New CanonicalTransaction
   -> MemoryStore.find_relevant
@@ -328,8 +325,8 @@ criteria no longer contradict the design.
   do not produce Canonical Transactions. (Complete)
 - Update domain and dummy-data tests.
 
-Exit criteria: invalid Canonical Transactions cannot be constructed, imported
-history and manual confirmation use one trusted model, and all model tests pass.
+Exit criteria: invalid Canonical Transactions cannot be constructed, user
+confirmation uses the trusted model, and all model tests pass.
 
 ### Step 2: Implement canonical ingestion
 
@@ -356,10 +353,10 @@ public interface.
 
 - Add Canonical Transaction persistence to `FileMemoryStore`. (Complete)
 - Use atomic file replacement and safe decoding. (Complete)
-- Add an explicit empty/legacy schema check.
+- Add an explicit empty/legacy schema check. (Complete)
 - Move CSV parsing and canonicalization outside the adapter.
-- Update the memory HTTP routes to receive the store through dependency
-  injection rather than mutating a module-level path.
+- Update the read-only memory HTTP route to use `MemoryStore`. (Complete)
+- Remove the legacy labeled-CSV import route. (Complete)
 
 Exit criteria: the same contract suite passes against in-memory and file-backed
 adapters, and existing live HTTP tests pass with a temporary file.

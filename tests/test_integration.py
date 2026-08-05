@@ -64,20 +64,6 @@ def running_server(tmp_path: Path):
 
 
 def test_memory_endpoints_over_live_server(running_server: str) -> None:
-    csv_path = Path(__file__).resolve().parent / "sample_csvs" / "short_transaction.csv"
-    assert csv_path.exists(), "Expected sample CSV fixture to exist"
-
-    with csv_path.open("rb") as file_handle:
-        import_response = httpx.post(
-            f"{running_server}/categorization-memory",
-            headers={"X-User-Id": TEST_USER_ID},
-            files={"file": ("short_transaction.csv", file_handle, "text/csv")},
-            timeout=10.0,
-        )
-
-    assert import_response.status_code == 200
-    assert import_response.json() == {"imported": 14, "skipped": 0}
-
     memory_response = httpx.get(
         f"{running_server}/categorization-memory",
         headers={"X-User-Id": TEST_USER_ID},
@@ -85,9 +71,5 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
     )
     assert memory_response.status_code == 200
 
-    memory_items = memory_response.json()
-    assert len(memory_items) == 14
-    assert memory_items[0]["merchant"] == "Navia Benefit Solutions"
-    assert memory_items[0]["statement"] == "NAVIA BENEFIT SOLUTIONS"
-    assert memory_items[0]["category"] == "Other Income"
-    assert "normalized_merchant" not in memory_items[0]
+    assert memory_response.headers["X-User-Id"] == TEST_USER_ID
+    assert memory_response.json() == []

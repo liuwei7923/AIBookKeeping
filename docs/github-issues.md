@@ -51,7 +51,7 @@ human-approved history.
 Use a local JSON file first:
 - `data/categorization_memory.json`
 
-Each memory item should represent a trusted labeled example, not just a raw
+Each memory item should represent a user-confirmed labeled example, not just a raw
 transaction.
 
 ### Proposed schema
@@ -83,7 +83,8 @@ transaction.
 ## Issue 3: Add API to import training dataset into categorization memory
 
 **Title**
-Add `POST /categorization-memory` for labeled history import
+Superseded: bank statements are never trusted on import. A future review
+endpoint records explicit user decisions through `MemoryStore.record_trusted()`.
 
 **Body**
 ### Goal

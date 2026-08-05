@@ -1,7 +1,7 @@
 # AI Bookkeeping App
 
-CSV-first, multi-user AI bookkeeping MVP for improving transaction
-categorization with trusted historical decisions and selective OpenAI review.
+CSV-first, multi-user AI bookkeeping MVP for reviewing bank transactions,
+learning from user-confirmed categories, and selectively using OpenAI.
 
 The project is being developed iteratively. The backend already supports CSV
 parsing, OpenAI-assisted recategorization, and file-backed categorization
@@ -21,12 +21,12 @@ Project guidance:
 
 The product is built around one learning loop:
 
-1. Import trusted historical categorizations.
-2. Store each distinct transaction as categorization memory.
-3. Reuse strong historical evidence for future transactions.
-4. Ask OpenAI only when deterministic evidence is insufficient.
-5. Let the user review uncertain results and corrections.
-6. Promote explicit user decisions back into trusted memory.
+1. Import transactions from bank statements.
+2. Let the user review and label initially uncategorized transactions.
+3. Store explicit user decisions as categorization memory.
+4. Reuse strong historical evidence for future transactions.
+5. Ask OpenAI only when deterministic evidence is insufficient.
+6. Let the user confirm or correct suggestions and store that decision.
 
 This is a retrieval and review system, not a fine-tuning project.
 
@@ -49,7 +49,7 @@ The core domain terms are:
 | Categorization Decision | The application's conclusion about a transaction category, including its evidence and certainty. |
 | Unknown Categorization | A deliberate decision to withhold a category because evidence is missing, weak, or conflicting. |
 | Needs Review | A decision that should be inspected and confirmed by the user. |
-| Trusted Categorization | A category imported from a trusted source or explicitly confirmed by the user. |
+| Trusted Categorization | A category explicitly selected or confirmed by the user. |
 | False Categorization | An assigned category that differs from the category the user confirms as correct. |
 | Categorization Anomaly | An assigned category that conflicts with historical weekly, monthly, or quarterly patterns. |
 
@@ -63,7 +63,7 @@ The repository currently includes:
 - deterministic CSV parsing and normalization
 - OpenAI-assisted CSV recategorization
 - local JSON categorization-memory storage
-- categorization-memory import and inspection endpoints
+- read-only categorization-memory inspection endpoint
 - OpenAI request counting and request logging
 - parser, memory, API, and live-server tests
 
@@ -209,35 +209,39 @@ The current store is:
 data/categorization_memory.json
 ```
 
-Each item represents one trusted historical decision:
+Each item is a complete canonical transaction with a user-confirmed category.
+The store persists domain objects rather than a separate flat memory schema.
 
 ```json
 {
-  "id": "23d81053-8281-4f31-94eb-b2bc02753ae7",
-  "date": "2026-03-24",
-  "merchant": "Electrify America",
-  "statement": "ELECTRIFY AMERICA 65RESTON VA",
+  "source": {
+    "user_id": "8a802680-06be-4815-986b-58b88392acfc",
+    "transaction_id": "23d81053-8281-4f31-94eb-b2bc02753ae7",
+    "date": "2026-03-24",
+    "merchant": "Electrify America",
+    "statement": "ELECTRIFY AMERICA 65RESTON VA",
+    "amount": "-7.00"
+  },
   "normalized_merchant": "electrify america",
-  "amount": -7.0,
+  "normalized_statement": "electrify america 65reston va",
   "direction": "debit",
-  "original_category": null,
-  "corrected_category": "Electric Vehicle Charging",
-  "source": "imported_labeled_history",
-  "notes": "EV charging merchant",
-  "created_at": "2026-03-24T18:00:00+00:00",
-  "updated_at": "2026-03-24T18:00:00+00:00",
-  "confidence": 1.0,
-  "usage_count": 0,
-  "last_matched_at": null
+  "identity_quality": "complete",
+  "fingerprint": "sha256:...",
+  "ai_categorization": null,
+  "trusted_categorization": {
+    "category": "Electric Vehicle Charging",
+    "source": "manual_classification",
+    "note": "Reviewed by user"
+  }
 }
 ```
 
 Current rules:
 
-- imported memory must include a merchant and final category
-- `original_category` is optional
-- `statement` preserves the raw bank description when available
-- memory import and retrieval do not call OpenAI
+- bank-statement imports are not trusted memory
+- only explicit review decisions call `MemoryStore.record_trusted()`
+- every stored transaction has user ownership and a deterministic fingerprint
+- memory retrieval does not call OpenAI
 - AI suggestions are not added automatically
 
 Phase 1 requires deterministic transaction fingerprints and duplicate-aware
@@ -261,42 +265,6 @@ Returns:
 Returns the configured model and in-process OpenAI request count. The `/admin`
 prefix organizes operational routes but does not currently provide access
 control.
-
-### `POST /categorization-memory`
-
-Imports trusted historical categorizations from a UTF-8 CSV.
-
-Required columns:
-
-- `merchant`
-- `category` or `corrected_category`
-
-Optional columns:
-
-- `amount`
-- `date`
-- `statement` or `original statement`
-- `original_category`
-- `notes`
-
-Current response:
-
-```json
-{
-  "imported": 120,
-  "skipped": 0
-}
-```
-
-This endpoint does not call OpenAI.
-
-Example:
-
-```bash
-curl -X POST \
-  http://127.0.0.1:8000/categorization-memory \
-  -F "file=@historical-transactions.csv;type=text/csv"
-```
 
 ### `GET /categorization-memory`
 
@@ -371,18 +339,18 @@ bookkeeping_app/routes/
 
 A typical workflow is:
 
-1. Import a trusted historical CSV through `POST /categorization-memory`.
-2. Inspect the stored decisions through `GET /categorization-memory`.
-3. Upload a new transaction CSV through `POST /transactions`.
-4. Review the returned category suggestions and reasons.
+1. Upload a bank-statement CSV through `POST /transactions`.
+2. Review and label the returned transactions.
+3. Persist each explicit decision through the review workflow (to be added).
+4. Inspect stored decisions through `GET /categorization-memory`.
 
 The current API does not yet persist user confirmations or promote reviewed
 suggestions into trusted memory.
 
 ## Cost Control Strategy
 
-Categorization-memory import and retrieval are deterministic and do not call
-OpenAI. The current `POST /transactions` implementation sends every parsed
+Categorization-memory retrieval is deterministic and does not call OpenAI. The
+current `POST /transactions` implementation sends every parsed
 transaction batch to OpenAI and records the request in the in-process usage
 counter.
 

@@ -2,9 +2,9 @@
 
 ## Context
 
-The current product in [`app/README.md`](/Users/w_liu/FiniancialMind/app/README.md) is a CSV-first FastAPI backend for transaction extraction, categorization-memory import, and AI-assisted recategorization. The existing implementation already has:
+The current product in [`app/README.md`](/Users/w_liu/FiniancialMind/app/README.md) is a CSV-first FastAPI backend for bank-statement transaction intake, categorization-memory retrieval, and AI-assisted recategorization. The existing implementation already has:
 
-- file-backed categorization memory import and retrieval
+- file-backed categorization memory retrieval
 - CSV parsing
 - image-based transaction extraction
 - OpenAI-backed category review
@@ -35,7 +35,8 @@ This document proposes a practical design for evolving the MVP into an AI bookke
 - The current backend is FastAPI-based and file-backed, and that should remain true until there is clear pressure to add a database.
 - The primary early users are individuals or small teams managing financial records through distinct user accounts and explicit data boundaries.
 - Input sources will be inconsistent across banks, cards, and exports.
-- Historical labels are imperfect, so memory cannot be treated as globally correct without provenance.
+- Bank-provided labels and AI suggestions are not trusted; memory is created
+  only from an explicit user decision.
 - High-confidence repeated merchant matches should avoid model calls whenever possible.
 - The user must be able to see why a category was suggested.
 
@@ -63,24 +64,23 @@ This creates a compounding system: every approved correction improves future cat
 
 ## Primary Workflows
 
-### 1. Historical Memory Import
+### 1. Initial Transaction Review
 
-The user uploads trusted historical transactions with known categories.
+The user uploads transactions from a bank statement and reviews them.
 
 System behavior:
 
 - parse rows into canonical transaction fields
 - normalize merchants and amounts
-- store provenance such as source file and import timestamp
-- deduplicate obvious duplicates
-- mark imported examples as trusted memory
+- deduplicate obvious duplicate transactions
+- present imported or suggested categories for review
+- record only the user's confirmed category as trusted memory
 
 Output:
 
-- imported count
-- skipped count
+- reviewed and unresolved transactions
 - duplicate count
-- warnings for malformed rows or suspicious categories
+- warnings for malformed rows
 
 ### 2. New Transaction Intake
 
@@ -313,14 +313,11 @@ The current API should evolve without breaking the MVP path.
 
 - `GET /health`
 - `GET /categorization-memory`
-- `POST /categorization-memory/import`
-- `POST /extract-transactions`
-- `POST /extract-transactions-csv`
-- `POST /recategorize-transactions-csv`
+- `POST /transactions`
 
 ### Extend
 
-#### `POST /recategorize-transactions-csv`
+#### `POST /transactions`
 
 Response should grow to include:
 
@@ -332,15 +329,15 @@ Response should grow to include:
 - `supporting_examples`
 - `needs_review`
 
-#### New `POST /categorization-memory/promote`
+#### New review-confirmation endpoint
 
 Purpose:
 
-- persist user-approved corrections as new memory items
+- call `MemoryStore.record_trusted()` for user-approved categories
 
 Input:
 
-- approved transactions
+- reviewed canonical transactions
 - optional notes
 - trust level
 
@@ -376,7 +373,7 @@ Recommended storage:
 Why:
 
 - `categorization_memory.json`
-  trusted historical examples and approved overrides
+  user-confirmed categories and approved corrections
 - `category_reference.json`
   vocabulary control and category policy
 - `review_queue.json`

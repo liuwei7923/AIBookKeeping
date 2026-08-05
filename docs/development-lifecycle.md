@@ -154,12 +154,13 @@ To keep the project manageable:
 The current roadmap is:
 
 1. local categorization memory foundation
-2. memory import API
-3. memory retrieval API
-4. memory-aware recategorization
-5. category reference file
-6. token-cost controls
-7. richer retrieval and merchant normalization
+2. bank-statement transaction intake
+3. initial review and trusted-memory recording
+4. memory retrieval API
+5. memory-aware recategorization
+6. category reference file
+7. token-cost controls
+8. richer retrieval and merchant normalization
 
 ## Definition of Done
 

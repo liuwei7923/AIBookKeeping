@@ -101,9 +101,10 @@ suggestion, the application records the same category in
 ## Trusted Categorization
 
 `TrustedCategorization` contains a non-blank category, an optional note, and the
-source through which trust was established: imported history, manual
-classification, a confirmed AI suggestion, or a corrected AI suggestion. Its
-presence makes the Canonical Transaction eligible for Categorization Memory.
+source through which trust was established: manual classification, a confirmed
+AI suggestion, or a corrected AI suggestion. Bank-statement categories remain
+untrusted until user review. Its presence makes the Canonical Transaction
+eligible for Categorization Memory.
 
 ## Deferred Contracts
 

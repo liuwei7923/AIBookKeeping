@@ -62,7 +62,7 @@ def trusted_transaction(
         fingerprint=fingerprint or f"sha256:{transaction_number:064x}",
         trusted_categorization=TrustedCategorization(
             category=category,
-            source=TrustedCategorizationSource.IMPORTED_HISTORY,
+            source=TrustedCategorizationSource.MANUAL_CLASSIFICATION,
         ),
     )
 
