@@ -1,25 +1,20 @@
-"""Categorization-memory collection routes."""
+"""Read-only inspection of user-confirmed categorization memory."""
 
-import logging
-from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Response
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
-from bookkeeping_app.domain_contracts import UserId
+from bookkeeping_app.domain_contracts import CanonicalTransaction, UserId
 from bookkeeping_app.memory import (
-    import_categorization_memory_csv,
-    load_categorization_memory,
+    FileMemoryStore,
+    MemoryListQuery,
+    MemoryStore,
 )
-from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.request_identity import request_user_id
-from bookkeeping_app.uploads import read_csv_upload
 
-logger = logging.getLogger("bookkeeping_app")
 router = APIRouter(prefix="/categorization-memory", tags=["categorization-memory"])
-MEMORY_PATH: Path = CATEGORIZATION_MEMORY_PATH
+MEMORY_STORE: MemoryStore = FileMemoryStore(CATEGORIZATION_MEMORY_PATH)
 
 
 @router.get("")
@@ -28,44 +23,35 @@ def list_categorization_memory(
     user_id: Annotated[UserId, Depends(request_user_id)],
 ) -> list[dict[str, object]]:
     response.headers["X-User-Id"] = str(user_id)
-    items = load_categorization_memory(user_id, MEMORY_PATH)
-    return [serialize_memory_item(item) for item in items]
+    transactions: list[CanonicalTransaction] = []
+    cursor: str | None = None
+    while True:
+        page = MEMORY_STORE.list_for_user(
+            MemoryListQuery(user_id=user_id, limit=500, cursor=cursor)
+        )
+        transactions.extend(page.transactions)
+        if page.next_cursor is None:
+            break
+        cursor = page.next_cursor
+    return [serialize_memory_transaction(item) for item in transactions]
 
 
-@router.post("")
-async def create_categorization_memory(
-    user_id: Annotated[UserId, Depends(request_user_id)],
-    file: UploadFile = File(...),
-) -> JSONResponse:
-    csv_text = await read_csv_upload(file)
-
-    try:
-        result = import_categorization_memory_csv(csv_text, user_id, MEMORY_PATH)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    logger.info(
-        "Imported categorization memory endpoint=categorization-memory user_id=%s "
-        "filename=%s imported=%s skipped=%s",
-        user_id,
-        file.filename,
-        result["imported"],
-        result["skipped"],
-    )
-    return JSONResponse(
-        content=result,
-        headers={"X-User-Id": str(user_id)},
-    )
-
-
-def serialize_memory_item(item: CategorizationMemoryItem) -> dict[str, object]:
+def serialize_memory_transaction(
+    transaction: CanonicalTransaction,
+) -> dict[str, object]:
+    trusted = transaction.trusted_categorization
+    assert trusted is not None
     return {
-        "date": item.date,
-        "merchant": item.merchant,
-        "statement": item.statement,
-        "amount": item.amount,
-        "direction": item.direction,
-        "original_category": item.original_category,
-        "category": item.corrected_category,
-        "notes": item.notes,
+        "date": transaction.source.date,
+        "merchant": transaction.source.merchant,
+        "statement": transaction.source.statement,
+        "amount": (
+            float(transaction.source.amount)
+            if transaction.source.amount is not None
+            else None
+        ),
+        "direction": transaction.direction,
+        "original_category": transaction.source.original_category,
+        "category": trusted.category,
+        "notes": trusted.note,
     }
