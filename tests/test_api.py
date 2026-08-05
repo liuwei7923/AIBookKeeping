@@ -1,11 +1,13 @@
 from pathlib import Path
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 
 from bookkeeping_app.api import app
 from bookkeeping_app.metrics import metrics
 
-client = TestClient(app)
+TEST_USER_ID = UUID("8a802680-06be-4815-986b-58b88392acfc")
+client = TestClient(app, headers={"X-User-Id": str(TEST_USER_ID)})
 
 
 def test_openapi_exposes_only_the_supported_routes() -> None:
@@ -66,7 +68,72 @@ def test_create_transactions_uses_review_service(monkeypatch) -> None:
     )
 
     assert response.status_code == 200
+    assert response.headers["X-User-Id"] == str(TEST_USER_ID)
     assert response.json()[0]["suggested_category"] == "Coffee"
+
+
+def test_explicit_request_user_overrides_the_client_default(monkeypatch) -> None:
+    jia_user_id = "0c050ed3-d41b-468c-9c29-e9e6da905c04"
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.transactions.review_transaction_categories",
+        lambda transactions: transactions,
+    )
+
+    response = client.post(
+        "/transactions",
+        headers={"X-User-Id": jia_user_id},
+        files={"file": ("transactions.csv", b"merchant\nCoffee\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-User-Id"] == jia_user_id
+
+
+def test_development_default_runs_user_api_without_header(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DEV_USER_ID", str(TEST_USER_ID))
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.transactions.review_transaction_categories",
+        lambda transactions: transactions,
+    )
+    client_without_user_header = TestClient(app)
+
+    response = client_without_user_header.post(
+        "/transactions",
+        files={"file": ("transactions.csv", b"merchant\nCoffee\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-User-Id"] == str(TEST_USER_ID)
+
+
+def test_categorization_memory_is_isolated_by_request_user(
+    tmp_path: Path, monkeypatch
+) -> None:
+    memory_path = tmp_path / "categorization_memory.json"
+    jia_user_id = "0c050ed3-d41b-468c-9c29-e9e6da905c04"
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.categorization_memory.MEMORY_PATH",
+        memory_path,
+    )
+
+    client.post(
+        "/categorization-memory",
+        files={"file": ("wei.csv", b"merchant,category\nWei Market,Groceries\n")},
+    )
+    client.post(
+        "/categorization-memory",
+        headers={"X-User-Id": jia_user_id},
+        files={"file": ("jia.csv", b"merchant,category\nJia Cafe,Coffee\n")},
+    )
+
+    wei_response = client.get("/categorization-memory")
+    jia_response = client.get(
+        "/categorization-memory", headers={"X-User-Id": jia_user_id}
+    )
+
+    assert [item["merchant"] for item in wei_response.json()] == ["Wei Market"]
+    assert [item["merchant"] for item in jia_response.json()] == ["Jia Cafe"]
 
 
 def test_admin_openai_usage_endpoint() -> None:

@@ -2,16 +2,19 @@
 
 import logging
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
+from bookkeeping_app.domain_contracts import UserId
 from bookkeeping_app.memory import (
     import_categorization_memory_csv,
     load_categorization_memory,
 )
 from bookkeeping_app.memory_schema import CategorizationMemoryItem
+from bookkeeping_app.request_identity import request_user_id
 from bookkeeping_app.uploads import read_csv_upload
 
 logger = logging.getLogger("bookkeeping_app")
@@ -20,30 +23,39 @@ MEMORY_PATH: Path = CATEGORIZATION_MEMORY_PATH
 
 
 @router.get("")
-def list_categorization_memory() -> list[dict[str, object]]:
-    items = load_categorization_memory(MEMORY_PATH)
+def list_categorization_memory(
+    response: Response,
+    user_id: Annotated[UserId, Depends(request_user_id)],
+) -> list[dict[str, object]]:
+    response.headers["X-User-Id"] = str(user_id)
+    items = load_categorization_memory(user_id, MEMORY_PATH)
     return [serialize_memory_item(item) for item in items]
 
 
 @router.post("")
 async def create_categorization_memory(
+    user_id: Annotated[UserId, Depends(request_user_id)],
     file: UploadFile = File(...),
 ) -> JSONResponse:
     csv_text = await read_csv_upload(file)
 
     try:
-        result = import_categorization_memory_csv(csv_text, MEMORY_PATH)
+        result = import_categorization_memory_csv(csv_text, user_id, MEMORY_PATH)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     logger.info(
-        "Imported categorization memory endpoint=categorization-memory "
+        "Imported categorization memory endpoint=categorization-memory user_id=%s "
         "filename=%s imported=%s skipped=%s",
+        user_id,
         file.filename,
         result["imported"],
         result["skipped"],
     )
-    return JSONResponse(content=result)
+    return JSONResponse(
+        content=result,
+        headers={"X-User-Id": str(user_id)},
+    )
 
 
 def serialize_memory_item(item: CategorizationMemoryItem) -> dict[str, object]:

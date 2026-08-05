@@ -8,6 +8,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+TEST_USER_ID = "8a802680-06be-4815-986b-58b88392acfc"
+
 
 def get_free_port() -> int:
     with socket.socket() as sock:
@@ -68,6 +70,7 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
     with csv_path.open("rb") as file_handle:
         import_response = httpx.post(
             f"{running_server}/categorization-memory",
+            headers={"X-User-Id": TEST_USER_ID},
             files={"file": ("short_transaction.csv", file_handle, "text/csv")},
             timeout=10.0,
         )
@@ -75,7 +78,11 @@ def test_memory_endpoints_over_live_server(running_server: str) -> None:
     assert import_response.status_code == 200
     assert import_response.json() == {"imported": 14, "skipped": 0}
 
-    memory_response = httpx.get(f"{running_server}/categorization-memory", timeout=10.0)
+    memory_response = httpx.get(
+        f"{running_server}/categorization-memory",
+        headers={"X-User-Id": TEST_USER_ID},
+        timeout=10.0,
+    )
     assert memory_response.status_code == 200
 
     memory_items = memory_response.json()

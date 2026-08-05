@@ -7,6 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
+from bookkeeping_app.domain_contracts import UserId
 from bookkeeping_app.memory_schema import CategorizationMemoryItem
 from bookkeeping_app.parsers import normalize_amount, sanitize_text
 
@@ -33,6 +34,7 @@ def infer_direction(amount: float | None) -> str | None:
 
 def build_memory_item(
     *,
+    user_id: UserId,
     merchant: str,
     corrected_category: str,
     amount: float | str | None = None,
@@ -55,6 +57,7 @@ def build_memory_item(
     normalized_amount = normalize_amount(amount)
 
     return CategorizationMemoryItem(
+        user_id=user_id,
         date=sanitize_text(date),
         merchant=cleaned_merchant,
         statement=sanitize_text(statement),
@@ -68,7 +71,10 @@ def build_memory_item(
     )
 
 
-def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
+def parse_memory_csv(
+    csv_text: str,
+    user_id: UserId,
+) -> list[CategorizationMemoryItem]:
     reader = csv.DictReader(StringIO(csv_text))
     if not reader.fieldnames:
         raise ValueError("CSV file must include a header row")
@@ -92,6 +98,7 @@ def parse_memory_csv(csv_text: str) -> list[CategorizationMemoryItem]:
 
         items.append(
             build_memory_item(
+                user_id=user_id,
                 merchant=merchant,
                 corrected_category=category,
                 amount=find_memory_csv_value(
@@ -122,10 +129,11 @@ def find_memory_csv_value(row: dict[str, str], candidates: list[str]) -> str | N
 
 def import_categorization_memory_csv(
     csv_text: str,
+    user_id: UserId,
     path: Path | None = None,
 ) -> dict[str, int]:
-    imported_items = parse_memory_csv(csv_text)
-    existing_items = load_categorization_memory(path)
+    imported_items = parse_memory_csv(csv_text, user_id)
+    existing_items = _load_all_categorization_memory(path)
     combined_items = existing_items + imported_items
     save_categorization_memory(combined_items, path)
 
@@ -147,6 +155,17 @@ def ensure_memory_file(path: Path | None = None) -> None:
 
 
 def load_categorization_memory(
+    user_id: UserId,
+    path: Path | None = None,
+) -> list[CategorizationMemoryItem]:
+    return [
+        item
+        for item in _load_all_categorization_memory(path)
+        if item.user_id == user_id
+    ]
+
+
+def _load_all_categorization_memory(
     path: Path | None = None,
 ) -> list[CategorizationMemoryItem]:
     path = resolve_memory_path(path)

@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from bookkeeping_app.domain_contracts import UserId
+
 
 def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -13,6 +15,7 @@ def utc_now_iso() -> str:
 class CategorizationMemoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    user_id: UserId
     id: str = Field(default_factory=lambda: str(uuid4()))
     date: str | None = None
     merchant: str

@@ -8,6 +8,11 @@ This context describes the people and financial records managed by the bookkeepi
 A person with a stable identity inside the bookkeeping application. A User is independent of any particular login provider or mutable contact information.
 _Avoid_: Account, customer
 
+**Development User**:
+A synthetic User with a stable identity used for local development and
+multi-user testing. It represents a product persona, not a software developer.
+_Avoid_: Developer User, real user
+
 **Source Transaction**:
 A transaction preserved as received from an external source before identity and categorization processing.
 _Avoid_: Raw transaction
