@@ -61,7 +61,7 @@ identity plus the latest AI and manual categorization state.
 | `source` | The source transaction from which this record was produced. |
 | `normalized_merchant` | Merchant identity produced by normalization. |
 | `normalized_statement` | Statement identity produced by normalization. |
-| `direction` | `debit`, `credit`, or `unknown`. |
+| `direction` | `debit` or `credit`; an amount is required before canonicalization. |
 | `identity_quality` | `complete` or `partial`. |
 | `fingerprint` | Required stable identity used for duplicate detection. |
 | `ai_categorization` | Optional AI decision details. |

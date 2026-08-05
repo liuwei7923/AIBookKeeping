@@ -25,7 +25,13 @@ class CategorizationMemoryItem(BaseModel):
     direction: TransactionDirection | None = None
     original_category: str | None = None
     corrected_category: str
-    source: str = "imported_labeled_history"
+    source: str = Field(
+        default="imported_labeled_history",
+        description=(
+            "Legacy memory-item provenance; replaced by "
+            "CanonicalTransaction.trusted_categorization.source"
+        ),
+    )
     notes: str | None = None
     created_at: str = Field(default_factory=utc_now_iso)
     updated_at: str = Field(default_factory=utc_now_iso)

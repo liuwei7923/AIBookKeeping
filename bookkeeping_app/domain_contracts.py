@@ -35,7 +35,6 @@ class TransactionDirection(StrEnum):
 
     DEBIT = "debit"
     CREDIT = "credit"
-    UNKNOWN = "unknown"
 
 
 class TransactionIdentityQuality(StrEnum):

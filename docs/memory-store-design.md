@@ -9,6 +9,8 @@ The application currently persists categorization memory as a JSON array of
 - memory amounts use `float`; domain amounts use `Decimal`
 - legacy memory directions used `income` and `expense`; all transaction models
   now use `credit` and `debit`
+- the legacy flat memory `source` string is replaced by the typed
+  `TrustedCategorizationSource` when routes adopt Canonical Transaction storage
 - memory records lack user ownership and canonical transaction identity
 - legacy canonical fingerprints were optional; the domain contract now requires
   every canonical transaction to have one

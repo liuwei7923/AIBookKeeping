@@ -27,6 +27,13 @@ def test_user_gets_a_generated_uuid() -> None:
     assert user.display_name is None
 
 
+def test_transaction_direction_uses_only_debit_and_credit() -> None:
+    assert set(TransactionDirection) == {
+        TransactionDirection.DEBIT,
+        TransactionDirection.CREDIT,
+    }
+
+
 def test_user_accepts_an_existing_uuid_and_display_name() -> None:
     user = User(user_id=USER_ID, display_name="  Wei Liu  ")
 

@@ -42,6 +42,8 @@ def build_memory_item(
     statement: str | None = None,
     original_category: str | None = None,
     notes: str | None = None,
+    # Legacy memory-item provenance. TrustedCategorizationSource replaces this
+    # once the memory routes migrate to CanonicalTransaction persistence.
     source: str = "imported_labeled_history",
 ) -> CategorizationMemoryItem:
     cleaned_merchant = sanitize_text(merchant)
