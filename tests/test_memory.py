@@ -5,14 +5,9 @@ from bookkeeping_app.memory import (
     import_categorization_memory_csv,
     infer_direction,
     load_categorization_memory,
-    normalize_merchant,
     parse_memory_csv,
     save_categorization_memory,
 )
-
-
-def test_normalize_merchant_removes_noise() -> None:
-    assert normalize_merchant("  AMZN Mktp US*AB12C  ") == "amzn mktp us ab12c"
 
 
 def test_infer_direction_uses_amount_sign() -> None:

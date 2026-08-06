@@ -127,6 +127,7 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
                 "merchant": find_csv_value(
                     row, ["merchant", "description", "payee", "name"]
                 ),
+                "statement": find_csv_value(row, ["original statement", "statement"]),
                 "category": find_csv_value(row, ["category"]),
             }
         )

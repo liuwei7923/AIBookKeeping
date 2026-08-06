@@ -2,27 +2,13 @@
 
 import csv
 import json
-import re
 from io import StringIO
 from pathlib import Path
 
 from bookkeeping_app.config import CATEGORIZATION_MEMORY_PATH
 from bookkeeping_app.memory_schema import CategorizationMemoryItem
+from bookkeeping_app.normalization import normalize_merchant
 from bookkeeping_app.parsers import normalize_amount, sanitize_text
-
-MULTISPACE_PATTERN = re.compile(r"\s+")
-PUNCTUATION_PATTERN = re.compile(r"[^a-z0-9\s]")
-
-
-def normalize_merchant(value: str | None) -> str | None:
-    cleaned = sanitize_text(value)
-    if cleaned is None:
-        return None
-
-    lowered = cleaned.lower()
-    without_punctuation = PUNCTUATION_PATTERN.sub(" ", lowered)
-    collapsed = MULTISPACE_PATTERN.sub(" ", without_punctuation).strip()
-    return collapsed or None
 
 
 def infer_direction(amount: float | None) -> str | None:

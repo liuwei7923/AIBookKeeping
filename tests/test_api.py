@@ -35,6 +35,7 @@ def test_create_transactions_uses_review_service(monkeypatch) -> None:
                 "date": "2026-03-01",
                 "amount": -12.5,
                 "merchant": "Starbucks",
+                "statement": None,
                 "category": "Coffee",
             }
         ]
