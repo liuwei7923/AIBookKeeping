@@ -9,15 +9,13 @@ from bookkeeping_app.domain_contracts import (
     AICategorization,
     CanonicalTransaction,
     CategorizationType,
+    EvidenceCondition,
+    ReviewRequirement,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
-    UserId,
-)
-from bookkeeping_app.review.contracts import (
-    EvidenceCondition,
-    ReviewRequirement,
     TransactionItem,
+    UserId,
 )
 from bookkeeping_app.review.session import EphemeralReviewSession
 

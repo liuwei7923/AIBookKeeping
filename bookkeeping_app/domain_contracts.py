@@ -1,5 +1,6 @@
 """Framework-independent user, transaction, and categorization contracts."""
 
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID, uuid4
@@ -9,6 +10,7 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationInfo,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -157,3 +159,105 @@ class CanonicalTransaction(BaseModel):
     fingerprint: str = Field(min_length=1)
     ai_categorization: AICategorization | None = None
     trusted_categorization: TrustedCategorization | None = None
+
+
+class CategoryOutcome(StrEnum):
+    ACCEPTED = "accepted"
+    SUGGESTED = "suggested"
+    PROPOSED = "proposed"
+    UNKNOWN = "unknown"
+
+
+class ReviewRequirement(StrEnum):
+    NEEDS_REVIEW = "needs_review"
+    NO_REVIEW_REQUIRED = "no_review_required"
+
+
+class ReviewResolution(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    CORRECTED = "corrected"
+    KEPT_UNKNOWN = "kept_unknown"
+
+
+class ReviewStatus(StrEnum):
+    TODO = "todo"
+    COMPLETED = "completed"
+
+
+class EvidenceCondition(StrEnum):
+    SUPPORTING = "supporting"
+    INSUFFICIENT = "insufficient"
+    CONFLICTING = "conflicting"
+
+
+class TransactionItem(BaseModel):
+    """A canonical transaction together with its human-review state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transaction: CanonicalTransaction
+    review_requirement: ReviewRequirement
+    resolution: ReviewResolution = ReviewResolution.PENDING
+    evidence_condition: EvidenceCondition
+    resolved_category: str | None = None
+
+    @property
+    def transaction_id(self) -> UUID:
+        return self.transaction.source.transaction_id
+
+    @property
+    def user_id(self) -> UserId:
+        return self.transaction.source.user_id
+
+    @computed_field
+    @property
+    def category_outcome(self) -> CategoryOutcome:
+        decision = self.transaction.ai_categorization
+        if decision is not None:
+            if decision.categorization_type is CategorizationType.SUGGESTED:
+                return CategoryOutcome.SUGGESTED
+            if decision.categorization_type is CategorizationType.PROPOSED:
+                return CategoryOutcome.PROPOSED
+            return CategoryOutcome.UNKNOWN
+        if self.transaction.trusted_categorization is not None:
+            return CategoryOutcome.ACCEPTED
+        return CategoryOutcome.UNKNOWN
+
+
+class ReviewRecord(BaseModel):
+    """Immutable record of one completed human transaction review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    review_record_id: UUID = Field(default_factory=uuid4)
+    transaction: CanonicalTransaction
+    evidence_condition: EvidenceCondition
+    resolution: ReviewResolution
+    reviewed_category: str | None = None
+    completed_at: datetime
+
+    @property
+    def transaction_id(self) -> UUID:
+        return self.transaction.source.transaction_id
+
+    @property
+    def user_id(self) -> UserId:
+        return self.transaction.source.user_id
+
+    @computed_field
+    @property
+    def review_status(self) -> ReviewStatus:
+        return ReviewStatus.COMPLETED
+
+    @computed_field
+    @property
+    def category_outcome(self) -> CategoryOutcome:
+        decision = self.transaction.ai_categorization
+        if decision is None:
+            return CategoryOutcome.ACCEPTED
+        if decision.categorization_type is CategorizationType.SUGGESTED:
+            return CategoryOutcome.SUGGESTED
+        if decision.categorization_type is CategorizationType.PROPOSED:
+            return CategoryOutcome.PROPOSED
+        return CategoryOutcome.UNKNOWN

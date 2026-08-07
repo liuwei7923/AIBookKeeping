@@ -1,105 +1,30 @@
-"""Domain contracts for user-owned transaction review."""
+"""Request and query contracts for transaction review workflows."""
 
-from enum import StrEnum
-from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from bookkeeping_app.domain_contracts import (
-    CanonicalTransaction,
-    CategorizationType,
-    UserId,
-)
+from bookkeeping_app.domain_contracts import ReviewResolution, UserId
 
 
-class CategoryOutcome(StrEnum):
-    ACCEPTED = "accepted"
-    SUGGESTED = "suggested"
-    PROPOSED = "proposed"
-    UNKNOWN = "unknown"
-
-
-class ReviewRequirement(StrEnum):
-    NEEDS_REVIEW = "needs_review"
-    NO_REVIEW_REQUIRED = "no_review_required"
-
-
-class ReviewResolution(StrEnum):
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    CORRECTED = "corrected"
-    KEPT_UNKNOWN = "kept_unknown"
-
-
-class EvidenceCondition(StrEnum):
-    SUPPORTING = "supporting"
-    INSUFFICIENT = "insufficient"
-    CONFLICTING = "conflicting"
-
-
-class TransactionItem(BaseModel):
-    """A canonical transaction together with its human-review state."""
-
+class TransactionReviewSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    transaction_id: UUID
+    reviewed_category: str | None = None
 
-    transaction: CanonicalTransaction
-    review_requirement: ReviewRequirement
-    resolution: ReviewResolution = ReviewResolution.PENDING
-    evidence_condition: EvidenceCondition
-    resolved_category: str | None = None
-
-    @property
-    def transaction_id(self) -> UUID:
-        return self.transaction.source.transaction_id
-
-    @property
-    def user_id(self) -> UserId:
-        return self.transaction.source.user_id
-
-    @computed_field
-    @property
-    def category_outcome(self) -> CategoryOutcome:
-        """Derive the outcome from preserved canonical categorization provenance."""
-        decision = self.transaction.ai_categorization
-        if decision is not None:
-            if decision.categorization_type is CategorizationType.SUGGESTED:
-                return CategoryOutcome.SUGGESTED
-            if decision.categorization_type is CategorizationType.PROPOSED:
-                return CategoryOutcome.PROPOSED
-            return CategoryOutcome.UNKNOWN
-        if self.transaction.trusted_categorization is not None:
-            return CategoryOutcome.ACCEPTED
-        return CategoryOutcome.UNKNOWN
-
-
-class AcceptAiRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    action: Literal["accept_ai"]
-
-
-class CorrectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    action: Literal["correct"]
-    category: str
-
-    @field_validator("category")
+    @field_validator("reviewed_category")
     @classmethod
-    def category_must_not_be_blank(cls, value: str) -> str:
+    def category_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if not value.strip():
-            raise ValueError("category must not be blank")
+            raise ValueError("reviewed_category must not be blank")
         return value.strip()
 
 
-class KeepUnknownRequest(BaseModel):
+class TransactionReviewBatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["keep_unknown"]
-
-
-ReviewResolutionRequest = Annotated[
-    AcceptAiRequest | CorrectRequest | KeepUnknownRequest,
-    Field(discriminator="action"),
-]
+    items: list[TransactionReviewSubmission] = Field(min_length=1)
 
 
 class TransactionItemQuery(BaseModel):

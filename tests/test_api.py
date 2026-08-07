@@ -16,6 +16,7 @@ from bookkeeping_app.domain_contracts import (
 from bookkeeping_app.memory import InMemoryMemoryStore
 from bookkeeping_app.metrics import metrics
 from bookkeeping_app.review import EphemeralReviewSession
+from bookkeeping_app.review.record_store import InMemoryReviewRecordStore
 
 TEST_USER_ID = UUID("8a802680-06be-4815-986b-58b88392acfc")
 client = TestClient(app, headers={"X-User-Id": str(TEST_USER_ID)})
@@ -23,10 +24,14 @@ client = TestClient(app, headers={"X-User-Id": str(TEST_USER_ID)})
 
 @pytest.fixture(autouse=True)
 def isolate_review_session(monkeypatch):
-    monkeypatch.setattr(
-        "bookkeeping_app.routes.transactions.REVIEW_SESSION",
-        EphemeralReviewSession(),
-    )
+    session = EphemeralReviewSession()
+    records = InMemoryReviewRecordStore()
+    for module in (
+        "bookkeeping_app.routes.transactions",
+        "bookkeeping_app.routes.transaction_reviews",
+    ):
+        monkeypatch.setattr(f"{module}.REVIEW_SESSION", session)
+        monkeypatch.setattr(f"{module}.REVIEW_STORE", records)
 
 
 def test_openapi_exposes_only_the_supported_routes() -> None:
@@ -39,9 +44,10 @@ def test_openapi_exposes_only_the_supported_routes() -> None:
         ("GET", "/admin/openai-usage"),
         ("GET", "/categorization-memory"),
         ("POST", "/transactions"),
-        ("GET", "/review-items"),
-        ("GET", "/review-items/{transaction_id}"),
-        ("POST", "/review-items/{transaction_id}"),
+        ("GET", "/transactions"),
+        ("GET", "/transactions/{transaction_id}"),
+        ("GET", "/transaction-reviews"),
+        ("POST", "/transaction-reviews"),
     }
 
 

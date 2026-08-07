@@ -49,6 +49,14 @@ _Avoid_: Failed
 The human disposition of a review item: Pending, Confirmed, Corrected, or Kept Unknown. It is independent of the original Category Outcome, which remains unchanged for provenance.
 _Avoid_: Category outcome, Accept AI
 
+**Review Status**:
+Whether a transaction review is To Do or Completed. Status describes workflow progress; a completed review separately records its Review Resolution.
+_Avoid_: Category outcome, review resolution
+
+**Review Record**:
+The durable, immutable record of a completed human review, preserving the original Categorization Decision and the resulting Review Resolution.
+_Avoid_: Review queue, categorization memory
+
 **Evidence Condition**:
 Whether the evidence behind a Categorization Decision is Supporting, Insufficient, or Conflicting. It constrains review actions without replacing the Category Outcome or review requirement.
 _Avoid_: Confidence, review status

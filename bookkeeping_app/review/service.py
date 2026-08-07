@@ -1,29 +1,25 @@
 """Framework-independent transaction review behavior."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from bookkeeping_app.domain_contracts import (
+    CategoryOutcome,
+    EvidenceCondition,
+    ReviewRecord,
+    ReviewRequirement,
+    ReviewResolution,
+    TransactionItem,
     TrustedCategorization,
     TrustedCategorizationSource,
     UserId,
 )
-from bookkeeping_app.memory import (
-    MemoryStore,
-    MemoryWriteStatus,
-    RecordTrustedCommand,
-)
+from bookkeeping_app.memory import MemoryStore, MemoryWriteStatus, RecordTrustedCommand
 from bookkeeping_app.review.contracts import (
-    AcceptAiRequest,
-    CategoryOutcome,
-    CorrectRequest,
-    EvidenceCondition,
-    KeepUnknownRequest,
-    ReviewRequirement,
-    ReviewResolution,
-    ReviewResolutionRequest,
-    TransactionItem,
     TransactionItemQuery,
+    TransactionReviewSubmission,
 )
+from bookkeeping_app.review.record_store import ReviewRecordStore
 from bookkeeping_app.review.session import EphemeralReviewSession
 
 
@@ -31,7 +27,7 @@ class ReviewNotFoundError(Exception):
     pass
 
 
-class InvalidReviewActionError(Exception):
+class InvalidReviewError(Exception):
     pass
 
 
@@ -45,107 +41,122 @@ class MemoryPromotionError(Exception):
 
 class ReviewService:
     def __init__(
-        self, review_session: EphemeralReviewSession, memory_store: MemoryStore
+        self,
+        review_session: EphemeralReviewSession,
+        review_store: ReviewRecordStore,
+        memory_store: MemoryStore,
     ) -> None:
         self._review_session = review_session
+        self._review_store = review_store
         self._memory_store = memory_store
 
-    def list_items(
-        self, user_id: UserId, resolution: ReviewResolution | None = None
-    ) -> tuple[TransactionItem, ...]:
+    def list_todo(self, user_id: UserId) -> tuple[TransactionItem, ...]:
         return tuple(
             item
             for item in self._review_session.list_for_user(
-                TransactionItemQuery(user_id=user_id, resolution=resolution)
+                TransactionItemQuery(
+                    user_id=user_id, resolution=ReviewResolution.PENDING
+                )
             )
             if item.review_requirement is ReviewRequirement.NEEDS_REVIEW
         )
 
-    def get_item(self, user_id: UserId, transaction_id: UUID) -> TransactionItem:
+    def list_completed(
+        self, user_id: UserId, resolution: ReviewResolution | None = None
+    ) -> tuple[ReviewRecord, ...]:
+        return self._review_store.list_for_user(user_id, resolution)
+
+    def get_transaction(
+        self, user_id: UserId, transaction_id: UUID
+    ) -> TransactionItem | ReviewRecord:
         item = self._review_session.get(transaction_id)
-        if (
-            item is None
-            or item.user_id != user_id
-            or item.review_requirement is not ReviewRequirement.NEEDS_REVIEW
-        ):
+        if item is not None and item.user_id == user_id:
+            return item
+        record = self._review_store.get(transaction_id)
+        if record is not None and record.user_id == user_id:
+            return record
+        raise ReviewNotFoundError
+
+    def complete(
+        self, user_id: UserId, submission: TransactionReviewSubmission
+    ) -> ReviewRecord:
+        existing = self._review_store.get(submission.transaction_id)
+        if existing is not None:
+            if existing.user_id != user_id:
+                raise ReviewNotFoundError
+            if existing.reviewed_category == submission.reviewed_category:
+                return existing
+            raise ReviewConflictError("transaction was already reviewed differently")
+
+        item = self._review_session.get(submission.transaction_id)
+        if item is None or item.user_id != user_id:
             raise ReviewNotFoundError
-        return item
 
-    def resolve(
-        self,
-        user_id: UserId,
-        transaction_id: UUID,
-        request: ReviewResolutionRequest,
-    ) -> TransactionItem:
-        item = self.get_item(user_id, transaction_id)
-        desired_resolution, category = self._desired_result(item, request)
-
-        if item.resolution is not ReviewResolution.PENDING:
-            if (
-                item.resolution is desired_resolution
-                and item.resolved_category == category
-            ):
-                return item
-            raise ReviewConflictError("review item already has a different resolution")
-
-        if desired_resolution is ReviewResolution.KEPT_UNKNOWN:
-            resolved = item.model_copy(
-                update={"resolution": desired_resolution, "resolved_category": None}
+        resolution = self._derive_resolution(item, submission.reviewed_category)
+        transaction = item.transaction
+        if resolution is not ReviewResolution.KEPT_UNKNOWN:
+            assert submission.reviewed_category is not None
+            source = (
+                TrustedCategorizationSource.CONFIRMED_AI_SUGGESTION
+                if resolution is ReviewResolution.CONFIRMED
+                else TrustedCategorizationSource.CORRECTED_AI_SUGGESTION
             )
-            self._review_session.replace(resolved)
-            return resolved
-
-        assert category is not None
-        source = (
-            TrustedCategorizationSource.CONFIRMED_AI_SUGGESTION
-            if desired_resolution is ReviewResolution.CONFIRMED
-            else TrustedCategorizationSource.CORRECTED_AI_SUGGESTION
-        )
-        trusted_transaction = item.transaction.model_copy(
-            update={
-                "trusted_categorization": TrustedCategorization(
-                    category=category,
-                    source=source,
-                    note="Resolved through transaction review.",
+            transaction = transaction.model_copy(
+                update={
+                    "trusted_categorization": TrustedCategorization(
+                        category=submission.reviewed_category,
+                        source=source,
+                        note="Resolved through transaction review.",
+                    )
+                }
+            )
+            result = self._memory_store.record_trusted(
+                [RecordTrustedCommand(transaction=transaction)]
+            )
+            status = result.items[0].status
+            if status not in {MemoryWriteStatus.CREATED, MemoryWriteStatus.DUPLICATE}:
+                raise MemoryPromotionError(
+                    result.items[0].reason or f"categorization memory write {status}"
                 )
-            }
-        )
-        result = self._memory_store.record_trusted(
-            [RecordTrustedCommand(transaction=trusted_transaction)]
-        )
-        status = result.items[0].status
-        if status not in {MemoryWriteStatus.CREATED, MemoryWriteStatus.DUPLICATE}:
-            raise MemoryPromotionError(
-                result.items[0].reason or f"categorization memory write {status}"
-            )
 
-        resolved = item.model_copy(
-            update={
-                "transaction": trusted_transaction,
-                "resolution": desired_resolution,
-                "resolved_category": category,
-            }
+        record = ReviewRecord(
+            transaction=transaction,
+            evidence_condition=item.evidence_condition,
+            resolution=resolution,
+            reviewed_category=submission.reviewed_category,
+            completed_at=datetime.now(UTC),
         )
-        self._review_session.replace(resolved)
-        return resolved
+        stored = self._review_store.record(record)
+        if stored.reviewed_category != record.reviewed_category:
+            raise ReviewConflictError("transaction was already reviewed differently")
+
+        self._review_session.replace(
+            item.model_copy(
+                update={
+                    "transaction": transaction,
+                    "resolution": resolution,
+                    "resolved_category": submission.reviewed_category,
+                }
+            )
+        )
+        return stored
 
     @staticmethod
-    def _desired_result(
-        item: TransactionItem, request: ReviewResolutionRequest
-    ) -> tuple[ReviewResolution, str | None]:
-        if isinstance(request, KeepUnknownRequest):
-            return ReviewResolution.KEPT_UNKNOWN, None
-        if isinstance(request, CorrectRequest):
-            return ReviewResolution.CORRECTED, request.category
+    def _derive_resolution(
+        item: TransactionItem, reviewed_category: str | None
+    ) -> ReviewResolution:
+        if reviewed_category is None:
+            return ReviewResolution.KEPT_UNKNOWN
 
-        assert isinstance(request, AcceptAiRequest)
-        if item.evidence_condition is EvidenceCondition.CONFLICTING:
-            raise InvalidReviewActionError("conflicting evidence requires correction")
         decision = item.transaction.ai_categorization
-        if item.category_outcome is CategoryOutcome.SUGGESTED and decision is not None:
-            return ReviewResolution.CONFIRMED, decision.category
-        if item.category_outcome is CategoryOutcome.PROPOSED and decision is not None:
-            return ReviewResolution.CONFIRMED, decision.category
-        raise InvalidReviewActionError(
-            "accept_ai requires a suggested or proposed AI category"
-        )
+        ai_category = decision.category if decision is not None else None
+        if reviewed_category == ai_category:
+            if item.category_outcome not in {
+                CategoryOutcome.SUGGESTED,
+                CategoryOutcome.PROPOSED,
+            }:
+                raise InvalidReviewError("unknown categorization cannot be confirmed")
+            if item.evidence_condition is EvidenceCondition.CONFLICTING:
+                raise InvalidReviewError("conflicting evidence requires correction")
+            return ReviewResolution.CONFIRMED
+        return ReviewResolution.CORRECTED

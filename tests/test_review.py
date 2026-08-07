@@ -1,4 +1,5 @@
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -12,24 +13,23 @@ from bookkeeping_app.domain_contracts import (
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
-    TrustedCategorization,
-    TrustedCategorizationSource,
 )
 from bookkeeping_app.memory import InMemoryMemoryStore, MemoryListQuery
 from bookkeeping_app.review import (
-    AcceptAiRequest,
     CategoryOutcome,
-    CorrectRequest,
     EphemeralReviewSession,
     EvidenceCondition,
-    KeepUnknownRequest,
     ReviewRequirement,
     ReviewResolution,
     TransactionItem,
+    TransactionReviewSubmission,
 )
-from bookkeeping_app.review.processing import enqueue_canonical_review_items
+from bookkeeping_app.review.record_store import (
+    FileReviewRecordStore,
+    InMemoryReviewRecordStore,
+)
 from bookkeeping_app.review.service import (
-    InvalidReviewActionError,
+    InvalidReviewError,
     MemoryPromotionError,
     ReviewConflictError,
     ReviewNotFoundError,
@@ -40,32 +40,26 @@ USER_ID = UUID("8a802680-06be-4815-986b-58b88392acfc")
 OTHER_USER_ID = UUID("0c050ed3-d41b-468c-9c29-e9e6da905c04")
 
 
-def review_item(
+def transaction_item(
     *,
     outcome: CategoryOutcome = CategoryOutcome.SUGGESTED,
     evidence: EvidenceCondition = EvidenceCondition.SUPPORTING,
     user_id: UUID = USER_ID,
-    transaction_number: int = 1,
+    number: int = 1,
     fingerprint: str | None = None,
 ) -> TransactionItem:
-    category_fields: dict[str, str] = {}
     categorization_type = CategorizationType.NOT_AVAILABLE
+    category = None
     if outcome is CategoryOutcome.SUGGESTED:
         categorization_type = CategorizationType.SUGGESTED
-        category_fields["category"] = "Groceries"
+        category = "Groceries"
     elif outcome is CategoryOutcome.PROPOSED:
         categorization_type = CategorizationType.PROPOSED
-        category_fields["category"] = "EV Charging"
-    decision = AICategorization(
-        decision_id=f"decision-{transaction_number}",
-        categorization_type=categorization_type,
-        reason="Review this result.",
-        **category_fields,
-    )
+        category = "EV Charging"
     transaction = CanonicalTransaction(
         source=SourceTransaction(
             user_id=user_id,
-            transaction_id=UUID(int=transaction_number),
+            transaction_id=UUID(int=number),
             date="2026-08-01",
             merchant="Whole Foods",
             statement="WHOLE FOODS 123",
@@ -75,8 +69,13 @@ def review_item(
         normalized_statement="whole foods 123",
         direction=TransactionDirection.DEBIT,
         identity_quality=TransactionIdentityQuality.COMPLETE,
-        fingerprint=fingerprint or f"sha256:{transaction_number:064x}",
-        ai_categorization=decision,
+        fingerprint=fingerprint or f"sha256:{number:064x}",
+        ai_categorization=AICategorization(
+            decision_id=f"decision-{number}",
+            categorization_type=categorization_type,
+            category=category,
+            reason="Review this result.",
+        ),
     )
     return TransactionItem(
         transaction=transaction,
@@ -85,256 +84,172 @@ def review_item(
     )
 
 
-def service_for(item: TransactionItem) -> tuple[ReviewService, InMemoryMemoryStore]:
+def service_for(item: TransactionItem):
     memory = InMemoryMemoryStore()
-    return ReviewService(EphemeralReviewSession((item,)), memory), memory
+    records = InMemoryReviewRecordStore()
+    service = ReviewService(EphemeralReviewSession((item,)), records, memory)
+    return service, records, memory
 
 
-def memory_items(memory: InMemoryMemoryStore, user_id: UUID = USER_ID):
-    return memory.list_for_user(MemoryListQuery(user_id=user_id)).transactions
-
-
-def test_suggested_accept_ai_writes_trusted_memory() -> None:
-    item = review_item()
-    service, memory = service_for(item)
-
-    resolved = service.resolve(
-        USER_ID, item.transaction_id, AcceptAiRequest(action="accept_ai")
+def submit(item: TransactionItem, category: str | None):
+    return TransactionReviewSubmission(
+        transaction_id=item.transaction_id, reviewed_category=category
     )
 
-    assert resolved.resolution is ReviewResolution.CONFIRMED
-    assert resolved.category_outcome is CategoryOutcome.SUGGESTED
-    assert resolved.transaction.ai_categorization == item.transaction.ai_categorization
+
+def memory_items(memory: InMemoryMemoryStore):
+    return memory.list_for_user(MemoryListQuery(user_id=USER_ID)).transactions
+
+
+def test_matching_suggested_category_confirms_and_writes_memory() -> None:
+    item = transaction_item()
+    service, records, memory = service_for(item)
+
+    record = service.complete(USER_ID, submit(item, "Groceries"))
+
+    assert record.resolution is ReviewResolution.CONFIRMED
+    assert record.category_outcome is CategoryOutcome.SUGGESTED
+    assert records.get(item.transaction_id) == record
     trusted = memory_items(memory)[0].trusted_categorization
     assert trusted is not None
-    assert trusted.category == "Groceries"
     assert trusted.source == "confirmed_ai_suggestion"
+    assert record.transaction.ai_categorization == item.transaction.ai_categorization
 
 
-def test_proposed_accept_ai_preserves_provenance() -> None:
-    item = review_item(outcome=CategoryOutcome.PROPOSED)
-    service, memory = service_for(item)
+def test_matching_proposed_category_confirms_and_preserves_provenance() -> None:
+    item = transaction_item(outcome=CategoryOutcome.PROPOSED)
+    service, _, memory = service_for(item)
 
-    resolved = service.resolve(
-        USER_ID, item.transaction_id, AcceptAiRequest(action="accept_ai")
-    )
+    record = service.complete(USER_ID, submit(item, "EV Charging"))
 
-    assert resolved.category_outcome is CategoryOutcome.PROPOSED
-    assert resolved.transaction.ai_categorization is not None
-    assert resolved.transaction.ai_categorization.category == "EV Charging"
+    assert record.resolution is ReviewResolution.CONFIRMED
+    assert record.category_outcome is CategoryOutcome.PROPOSED
     assert (
         memory_items(memory)[0].ai_categorization == item.transaction.ai_categorization
     )
 
 
-@pytest.mark.parametrize(
-    ("outcome", "evidence"),
-    [
-        (CategoryOutcome.UNKNOWN, EvidenceCondition.INSUFFICIENT),
-        (CategoryOutcome.SUGGESTED, EvidenceCondition.CONFLICTING),
-    ],
-)
-def test_accept_ai_rejects_unknown_and_conflicting_evidence(
-    outcome: CategoryOutcome, evidence: EvidenceCondition
-) -> None:
-    item = review_item(outcome=outcome, evidence=evidence)
-    service, memory = service_for(item)
+def test_different_category_corrects_and_writes_memory() -> None:
+    item = transaction_item()
+    service, _, memory = service_for(item)
 
-    with pytest.raises(InvalidReviewActionError):
-        service.resolve(
-            USER_ID, item.transaction_id, AcceptAiRequest(action="accept_ai")
-        )
+    record = service.complete(USER_ID, submit(item, "Business Meals"))
 
-    assert not memory_items(memory)
-
-
-def test_correction_writes_corrected_memory() -> None:
-    item = review_item()
-    service, memory = service_for(item)
-
-    resolved = service.resolve(
-        USER_ID,
-        item.transaction_id,
-        CorrectRequest(action="correct", category="Dining"),
-    )
-
-    assert resolved.resolution is ReviewResolution.CORRECTED
+    assert record.resolution is ReviewResolution.CORRECTED
     trusted = memory_items(memory)[0].trusted_categorization
     assert trusted is not None
-    assert trusted.category == "Dining"
     assert trusted.source == "corrected_ai_suggestion"
 
 
-def test_keep_unknown_does_not_write_memory() -> None:
-    item = review_item(outcome=CategoryOutcome.UNKNOWN)
-    service, memory = service_for(item)
+def test_null_category_keeps_unknown_without_memory_write() -> None:
+    item = transaction_item(outcome=CategoryOutcome.UNKNOWN)
+    service, records, memory = service_for(item)
 
-    resolved = service.resolve(
-        USER_ID, item.transaction_id, KeepUnknownRequest(action="keep_unknown")
-    )
+    record = service.complete(USER_ID, submit(item, None))
 
-    assert resolved.resolution is ReviewResolution.KEPT_UNKNOWN
-    assert not memory_items(memory)
+    assert record.resolution is ReviewResolution.KEPT_UNKNOWN
+    assert records.get(item.transaction_id) == record
+    assert memory_items(memory) == ()
 
 
-def test_identical_resolution_is_idempotent_and_different_one_conflicts() -> None:
-    item = review_item()
-    service, memory = service_for(item)
-    request = AcceptAiRequest(action="accept_ai")
+def test_conflicting_evidence_rejects_confirming_ai_category() -> None:
+    item = transaction_item(evidence=EvidenceCondition.CONFLICTING)
+    service, _, _ = service_for(item)
 
-    first = service.resolve(USER_ID, item.transaction_id, request)
-    second = service.resolve(USER_ID, item.transaction_id, request)
+    with pytest.raises(InvalidReviewError):
+        service.complete(USER_ID, submit(item, "Groceries"))
+
+
+def test_identical_retry_is_idempotent_and_different_retry_conflicts() -> None:
+    item = transaction_item()
+    service, _, memory = service_for(item)
+    submission = submit(item, "Groceries")
+
+    first = service.complete(USER_ID, submission)
+    second = service.complete(USER_ID, submission)
 
     assert second == first
     assert len(memory_items(memory)) == 1
     with pytest.raises(ReviewConflictError):
-        service.resolve(
-            USER_ID,
-            item.transaction_id,
-            CorrectRequest(action="correct", category="Dining"),
-        )
+        service.complete(USER_ID, submit(item, "Dining"))
 
 
 def test_cross_user_access_is_rejected() -> None:
-    item = review_item()
-    service, _ = service_for(item)
+    item = transaction_item()
+    service, _, _ = service_for(item)
 
     with pytest.raises(ReviewNotFoundError):
-        service.get_item(OTHER_USER_ID, item.transaction_id)
+        service.complete(OTHER_USER_ID, submit(item, "Groceries"))
 
 
-def test_memory_duplicate_succeeds_and_conflict_leaves_item_pending() -> None:
-    first = review_item(transaction_number=1, fingerprint="sha256:same")
-    first_service, memory = service_for(first)
-    first_service.resolve(
-        USER_ID, first.transaction_id, AcceptAiRequest(action="accept_ai")
+def test_memory_conflict_leaves_review_unrecorded() -> None:
+    first = transaction_item(number=1, fingerprint="sha256:same")
+    service, _, memory = service_for(first)
+    service.complete(USER_ID, submit(first, "Groceries"))
+    conflict = transaction_item(number=2, fingerprint="sha256:same")
+    records = InMemoryReviewRecordStore()
+    conflict_service = ReviewService(
+        EphemeralReviewSession((conflict,)), records, memory
     )
 
-    duplicate = review_item(transaction_number=2, fingerprint="sha256:same")
-    duplicate_service = ReviewService(EphemeralReviewSession((duplicate,)), memory)
-    assert (
-        duplicate_service.resolve(
-            USER_ID, duplicate.transaction_id, AcceptAiRequest(action="accept_ai")
-        ).resolution
-        is ReviewResolution.CONFIRMED
-    )
-
-    conflict = review_item(transaction_number=3, fingerprint="sha256:same")
-    conflict_service = ReviewService(EphemeralReviewSession((conflict,)), memory)
     with pytest.raises(MemoryPromotionError):
-        conflict_service.resolve(
-            USER_ID,
-            conflict.transaction_id,
-            CorrectRequest(action="correct", category="Dining"),
-        )
-    assert (
-        conflict_service.get_item(USER_ID, conflict.transaction_id).resolution
-        is ReviewResolution.PENDING
-    )
+        conflict_service.complete(USER_ID, submit(conflict, "Dining"))
+
+    assert records.get(conflict.transaction_id) is None
 
 
-def test_review_item_api_list_detail_filter_and_resolution(monkeypatch) -> None:
-    pending = review_item(transaction_number=10)
-    review_session = EphemeralReviewSession((pending,))
-    memory_store = InMemoryMemoryStore()
-    monkeypatch.setattr(
-        "bookkeeping_app.routes.review_items.REVIEW_SESSION", review_session
+def test_file_review_store_persists_completed_records(tmp_path: Path) -> None:
+    item = transaction_item()
+    path = tmp_path / "review_records.json"
+    store = FileReviewRecordStore(path)
+    service = ReviewService(
+        EphemeralReviewSession((item,)), store, InMemoryMemoryStore()
     )
-    monkeypatch.setattr(
-        "bookkeeping_app.routes.review_items.MEMORY_STORE", memory_store
-    )
+    record = service.complete(USER_ID, submit(item, "Groceries"))
+
+    assert FileReviewRecordStore(path).get(item.transaction_id) == record
+
+
+def test_transaction_and_review_routes_support_todo_completed_and_batch(
+    monkeypatch,
+) -> None:
+    item = transaction_item(number=10)
+    unknown = transaction_item(outcome=CategoryOutcome.UNKNOWN, number=11)
+    session = EphemeralReviewSession((item, unknown))
+    records = InMemoryReviewRecordStore()
+    memory = InMemoryMemoryStore()
+    for module in (
+        "bookkeeping_app.routes.transactions",
+        "bookkeeping_app.routes.transaction_reviews",
+    ):
+        monkeypatch.setattr(f"{module}.REVIEW_SESSION", session)
+        monkeypatch.setattr(f"{module}.REVIEW_STORE", records)
+        monkeypatch.setattr(f"{module}.MEMORY_STORE", memory)
     client = TestClient(app, headers={"X-User-Id": str(USER_ID)})
 
-    listed = client.get("/review-items", params={"resolution": "pending"})
-    detailed = client.get(f"/review-items/{pending.transaction_id}")
-    resolved = client.post(
-        f"/review-items/{pending.transaction_id}", json={"action": "accept_ai"}
+    todo = client.get("/transactions", params={"review_status": "todo"})
+    completed = client.post(
+        "/transaction-reviews",
+        json={
+            "items": [
+                {
+                    "transaction_id": str(item.transaction_id),
+                    "reviewed_category": "Groceries",
+                },
+                {
+                    "transaction_id": str(unknown.transaction_id),
+                    "reviewed_category": None,
+                },
+            ]
+        },
     )
+    history = client.get("/transactions", params={"review_status": "completed"})
+    audit = client.get("/transaction-reviews")
 
-    assert listed.status_code == 200
-    assert len(listed.json()) == 1
-    assert detailed.status_code == 200
-    assert resolved.status_code == 200
-    assert resolved.json()["resolution"] == "confirmed"
-    assert client.get("/review-items", params={"resolution": "pending"}).json() == []
-    assert (
-        len(client.get("/review-items", params={"resolution": "confirmed"}).json()) == 1
-    )
-
-
-def test_review_api_enforces_user_isolation_and_conflict(monkeypatch) -> None:
-    pending = review_item(transaction_number=11)
-    monkeypatch.setattr(
-        "bookkeeping_app.routes.review_items.REVIEW_SESSION",
-        EphemeralReviewSession((pending,)),
-    )
-    monkeypatch.setattr(
-        "bookkeeping_app.routes.review_items.MEMORY_STORE", InMemoryMemoryStore()
-    )
-    owner = TestClient(app, headers={"X-User-Id": str(USER_ID)})
-    other = TestClient(app, headers={"X-User-Id": str(OTHER_USER_ID)})
-
-    assert other.get(f"/review-items/{pending.transaction_id}").status_code == 404
-    assert (
-        owner.post(
-            f"/review-items/{pending.transaction_id}", json={"action": "keep_unknown"}
-        ).status_code
-        == 200
-    )
-    assert (
-        owner.post(
-            f"/review-items/{pending.transaction_id}",
-            json={"action": "correct", "category": "Dining"},
-        ).status_code
-        == 409
-    )
-
-
-def test_deterministic_accepted_transaction_does_not_enter_review_view() -> None:
-    accepted = review_item().transaction.model_copy(update={"ai_categorization": None})
-    review_session = EphemeralReviewSession()
-
-    queued = enqueue_canonical_review_items([accepted], review_session)
-
-    assert queued == ()
-    assert review_session.list_all() == ()
-
-
-def test_review_session_state_is_process_local_and_not_recovered() -> None:
-    first_process = EphemeralReviewSession((review_item(transaction_number=22),))
-    restarted_process = EphemeralReviewSession()
-
-    assert len(first_process.list_all()) == 1
-    assert restarted_process.list_all() == ()
-
-
-def test_category_outcome_is_derived_from_canonical_provenance() -> None:
-    suggested = review_item(outcome=CategoryOutcome.SUGGESTED)
-    confirmed = suggested.model_copy(
-        update={
-            "transaction": suggested.transaction.model_copy(
-                update={"trusted_categorization": memory_categorization()}
-            )
-        }
-    )
-    deterministic = suggested.model_copy(
-        update={
-            "transaction": suggested.transaction.model_copy(
-                update={
-                    "ai_categorization": None,
-                    "trusted_categorization": memory_categorization(),
-                }
-            ),
-            "review_requirement": ReviewRequirement.NO_REVIEW_REQUIRED,
-        }
-    )
-
-    assert confirmed.category_outcome is CategoryOutcome.SUGGESTED
-    assert deterministic.category_outcome is CategoryOutcome.ACCEPTED
-
-
-def memory_categorization() -> TrustedCategorization:
-    return TrustedCategorization(
-        category="Groceries",
-        source=TrustedCategorizationSource.MANUAL_CLASSIFICATION,
-    )
+    assert todo.status_code == 200 and len(todo.json()) == 2
+    assert completed.status_code == 200
+    assert completed.json()[0]["resolution"] == "confirmed"
+    assert completed.json()[1]["resolution"] == "kept_unknown"
+    assert len(history.json()) == 2
+    assert len(audit.json()) == 2
+    assert client.get("/transactions", params={"review_status": "todo"}).json() == []

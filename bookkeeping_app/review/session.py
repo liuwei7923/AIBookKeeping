@@ -3,7 +3,8 @@
 from threading import RLock
 from uuid import UUID
 
-from bookkeeping_app.review.contracts import TransactionItem, TransactionItemQuery
+from bookkeeping_app.domain_contracts import TransactionItem
+from bookkeeping_app.review.contracts import TransactionItemQuery
 
 
 class EphemeralReviewSession:

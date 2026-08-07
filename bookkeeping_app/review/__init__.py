@@ -1,29 +1,31 @@
 """Transaction review contracts, behavior, and ephemeral session state."""
 
-from bookkeeping_app.review.contracts import (
-    AcceptAiRequest,
+from bookkeeping_app.domain_contracts import (
     CategoryOutcome,
-    CorrectRequest,
     EvidenceCondition,
-    KeepUnknownRequest,
+    ReviewRecord,
     ReviewRequirement,
     ReviewResolution,
-    ReviewResolutionRequest,
+    ReviewStatus,
     TransactionItem,
+)
+from bookkeeping_app.review.contracts import (
     TransactionItemQuery,
+    TransactionReviewBatchRequest,
+    TransactionReviewSubmission,
 )
 from bookkeeping_app.review.session import EphemeralReviewSession
 
 __all__ = [
-    "AcceptAiRequest",
     "CategoryOutcome",
-    "CorrectRequest",
     "EvidenceCondition",
     "EphemeralReviewSession",
-    "KeepUnknownRequest",
+    "ReviewRecord",
     "ReviewRequirement",
     "ReviewResolution",
-    "ReviewResolutionRequest",
+    "ReviewStatus",
     "TransactionItem",
     "TransactionItemQuery",
+    "TransactionReviewBatchRequest",
+    "TransactionReviewSubmission",
 ]
