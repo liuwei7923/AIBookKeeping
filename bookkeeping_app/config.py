@@ -17,3 +17,6 @@ CATEGORIZATION_MEMORY_PATH = Path(
         "CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json")
     )
 )
+REVIEW_RECORD_PATH = Path(
+    os.getenv("REVIEW_RECORD_PATH", str(DATA_DIR / "review_records.json"))
+)

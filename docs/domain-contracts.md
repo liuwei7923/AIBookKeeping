@@ -23,7 +23,7 @@ SourceTransaction
         | normalization and identity processing
         v
 CanonicalTransaction
-        |-- ai_categorization: CategorizationDecision | None
+        |-- ai_categorization: AICategorization | None
         `-- trusted_categorization: TrustedCategorization | None
 ```
 
@@ -72,24 +72,24 @@ not overwrite the AI decision, allowing later comparison between the suggestion
 and the category accepted by the application.
 
 User IDs are UUIDs assigned to a `User`. `CanonicalTransaction`,
-`CategorizationDecision`, and `TrustedCategorization` inherit ownership from the
+`AICategorization`, and `TrustedCategorization` inherit ownership from the
 embedded source transaction rather than duplicating `user_id`.
 
 If the source identity is insufficient to generate a meaningful fingerprint,
 the Source Transaction remains available but no Canonical Transaction is
 constructed.
 
-## AI Categorization Decision
+## AI Categorization
 
-`CategorizationDecision` records one AI outcome and its explanation. All AI
+`AICategorization` records one AI outcome and its explanation. All AI
 decisions require review by domain definition, so the model does not carry a
 redundant `needs_review` flag or an undefined confidence label.
 
-| Decision type | Category fields |
+| Categorization type | Category field |
 | --- | --- |
-| `ai_suggestion` | Requires `suggested_category`; forbids `proposed_category`. |
-| `ai_proposed_new_category` | Requires `proposed_category`; forbids `suggested_category`. |
-| `unresolved` | Forbids both category fields. |
+| `suggested` | Requires `category`; the value belongs to the known category set. |
+| `proposed` | Requires `category`; the value is a newly proposed category name. |
+| `not_available` | Requires `category` to be null. |
 
 Each decision has a non-blank `decision_id` and `reason`. It may cite
 `supporting_memory_ids` when the AI used categorization memory.

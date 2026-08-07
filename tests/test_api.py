@@ -1,6 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from bookkeeping_app.api import app
@@ -14,9 +15,23 @@ from bookkeeping_app.domain_contracts import (
 )
 from bookkeeping_app.memory import InMemoryMemoryStore
 from bookkeeping_app.metrics import metrics
+from bookkeeping_app.review import EphemeralReviewSession
+from bookkeeping_app.review.record_store import InMemoryReviewRecordStore
 
 TEST_USER_ID = UUID("8a802680-06be-4815-986b-58b88392acfc")
 client = TestClient(app, headers={"X-User-Id": str(TEST_USER_ID)})
+
+
+@pytest.fixture(autouse=True)
+def isolate_review_session(monkeypatch):
+    session = EphemeralReviewSession()
+    records = InMemoryReviewRecordStore()
+    for module in (
+        "bookkeeping_app.routes.transactions",
+        "bookkeeping_app.routes.transaction_reviews",
+    ):
+        monkeypatch.setattr(f"{module}.REVIEW_SESSION", session)
+        monkeypatch.setattr(f"{module}.REVIEW_STORE", records)
 
 
 def test_openapi_exposes_only_the_supported_routes() -> None:
@@ -29,6 +44,10 @@ def test_openapi_exposes_only_the_supported_routes() -> None:
         ("GET", "/admin/openai-usage"),
         ("GET", "/categorization-memory"),
         ("POST", "/transactions"),
+        ("GET", "/transactions"),
+        ("GET", "/transactions/{transaction_id}"),
+        ("GET", "/transaction-reviews"),
+        ("POST", "/transaction-reviews"),
     }
 
 
@@ -78,6 +97,46 @@ def test_create_transactions_uses_review_service(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.headers["X-User-Id"] == str(TEST_USER_ID)
     assert response.json()[0]["suggested_category"] == "Coffee"
+    assert UUID(response.json()[0]["transaction_id"])
+
+
+def test_create_transactions_adds_review_required_results_to_queue(
+    monkeypatch,
+) -> None:
+    review_session = EphemeralReviewSession()
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.transactions.REVIEW_SESSION", review_session
+    )
+    monkeypatch.setattr(
+        "bookkeeping_app.routes.transactions.review_transaction_categories",
+        lambda transactions: [
+            {
+                "date": "2026-03-01",
+                "amount": -12.5,
+                "merchant": "Starbucks",
+                "original_category": "Coffee",
+                "suggested_category": "Coffee Shops",
+                "reason": "Merchant match.",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/transactions",
+        files={
+            "file": (
+                "transactions.csv",
+                b"date,amount,merchant,category\n2026-03-01,-12.50,Starbucks,Coffee\n",
+                "text/csv",
+            )
+        },
+    )
+
+    transaction_id = UUID(response.json()[0]["transaction_id"])
+    queued = review_session.get(transaction_id)
+    assert queued is not None
+    assert queued.category_outcome == "suggested"
+    assert queued.resolution == "pending"
 
 
 def test_explicit_request_user_overrides_the_client_default(monkeypatch) -> None:

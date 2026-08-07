@@ -32,9 +32,9 @@ from uuid import uuid5
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from bookkeeping_app.domain_contracts import (
+    AICategorization,
     CanonicalTransaction,
-    CategorizationDecision,
-    DecisionType,
+    CategorizationType,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -105,17 +105,17 @@ class DummyTransactionDataset(BaseModel):
 def _build_categorizations(
     index: int,
     suggested_category: str,
-) -> tuple[CategorizationDecision | None, TrustedCategorization | None]:
+) -> tuple[AICategorization | None, TrustedCategorization | None]:
     scenario = index % 8
     decision_id = f"decision-{index + 1:04d}"
     memory_ids = [f"memory-{index + 1:04d}"]
 
     if scenario == 1:
         return (
-            CategorizationDecision(
+            AICategorization(
                 decision_id=decision_id,
-                decision_type=DecisionType.AI_SUGGESTION,
-                suggested_category=suggested_category,
+                categorization_type=CategorizationType.SUGGESTED,
+                category=suggested_category,
                 reason="AI matched the merchant to a known category.",
                 supporting_memory_ids=memory_ids,
             ),
@@ -123,19 +123,19 @@ def _build_categorizations(
         )
     if scenario == 2:
         return (
-            CategorizationDecision(
+            AICategorization(
                 decision_id=decision_id,
-                decision_type=DecisionType.AI_PROPOSED_NEW_CATEGORY,
-                proposed_category="Specialized Merchant Expense",
+                categorization_type=CategorizationType.PROPOSED,
+                category="Specialized Merchant Expense",
                 reason="AI found no suitable category in the known examples.",
             ),
             None,
         )
     if scenario == 3:
         return (
-            CategorizationDecision(
+            AICategorization(
                 decision_id=decision_id,
-                decision_type=DecisionType.UNRESOLVED,
+                categorization_type=CategorizationType.NOT_AVAILABLE,
                 reason="The available categorization evidence conflicts.",
                 supporting_memory_ids=memory_ids,
             ),
@@ -143,10 +143,10 @@ def _build_categorizations(
         )
     if scenario == 4:
         return (
-            CategorizationDecision(
+            AICategorization(
                 decision_id=decision_id,
-                decision_type=DecisionType.AI_SUGGESTION,
-                suggested_category=suggested_category,
+                categorization_type=CategorizationType.SUGGESTED,
+                category=suggested_category,
                 reason="AI matched the merchant to a known category.",
                 supporting_memory_ids=memory_ids,
             ),
@@ -158,10 +158,10 @@ def _build_categorizations(
         )
     if scenario == 5:
         return (
-            CategorizationDecision(
+            AICategorization(
                 decision_id=decision_id,
-                decision_type=DecisionType.AI_SUGGESTION,
-                suggested_category=suggested_category,
+                categorization_type=CategorizationType.SUGGESTED,
+                category=suggested_category,
                 reason="AI matched the merchant to a known category.",
                 supporting_memory_ids=memory_ids,
             ),

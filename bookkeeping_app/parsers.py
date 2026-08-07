@@ -84,7 +84,9 @@ def parse_category_review(raw_text: str) -> list[dict[str, Any]]:
                 "merchant": sanitize_text(item.get("merchant")),
                 "original_category": sanitize_text(item.get("original_category")),
                 "suggested_category": sanitize_text(item.get("suggested_category")),
+                "proposed_category": sanitize_text(item.get("proposed_category")),
                 "reason": sanitize_text(item.get("reason")),
+                "evidence_condition": sanitize_text(item.get("evidence_condition")),
             }
         )
 

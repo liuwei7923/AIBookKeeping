@@ -86,7 +86,7 @@ class CanonicalTransaction(BaseModel):
     direction: TransactionDirection
     identity_quality: TransactionIdentityQuality
     fingerprint: str = Field(min_length=1)
-    ai_categorization: CategorizationDecision | None = None
+    ai_categorization: AICategorization | None = None
     trusted_categorization: TrustedCategorization | None = None
 ```
 
@@ -248,7 +248,7 @@ New CanonicalTransaction
   -> MemoryStore.find_relevant
   -> shared Memory Retrieval
   -> deterministic rules or bounded AI review
-  -> CategorizationDecision
+  -> AICategorization
 ```
 
 ## Adapters
