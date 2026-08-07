@@ -45,6 +45,18 @@ _Avoid_: Uncategorized error, best guess
 A categorization decision presented to the user for confirmation because it is unknown or has evidence that its assigned category may be wrong.
 _Avoid_: Failed
 
+**Review Resolution**:
+The human disposition of a review item: Pending, Confirmed, Corrected, or Kept Unknown. It is independent of the original Category Outcome, which remains unchanged for provenance.
+_Avoid_: Category outcome, Accept AI
+
+**Evidence Condition**:
+Whether the evidence behind a Categorization Decision is Supporting, Insufficient, or Conflicting. It constrains review actions without replacing the Category Outcome or review requirement.
+_Avoid_: Confidence, review status
+
+**Accept AI**:
+The explicit review action that confirms a Suggested or Proposed Category when a category exists and evidence is not conflicting. The original AI outcome remains Suggested or Proposed after confirmation.
+_Avoid_: Accepted Category
+
 **Categorization Anomaly**:
 An assigned category that is inconsistent with the transaction's historical patterns when evaluated over weekly, monthly, or quarterly windows. It is evidence for review, not proof that the category is wrong.
 _Avoid_: Fraud, transaction anomaly

@@ -10,6 +10,8 @@ from bookkeeping_app.domain_contracts import UserId
 from bookkeeping_app.openai_service import review_transaction_categories
 from bookkeeping_app.parsers import parse_csv_transactions
 from bookkeeping_app.request_identity import request_user_id
+from bookkeeping_app.review.processing import enqueue_review_results
+from bookkeeping_app.routes.review_items import REVIEW_SESSION
 from bookkeeping_app.uploads import read_csv_upload
 
 logger = logging.getLogger("bookkeeping_app")
@@ -36,7 +38,13 @@ async def create_transactions(
         "Completed category review endpoint=transactions reviewed_transactions=%s",
         len(reviewed_transactions),
     )
+    queued_transactions = enqueue_review_results(
+        user_id=user_id,
+        source_rows=transactions,
+        reviewed_rows=reviewed_transactions,
+        review_session=REVIEW_SESSION,
+    )
     return JSONResponse(
-        content=reviewed_transactions,
+        content=queued_transactions,
         headers={"X-User-Id": str(user_id)},
     )
