@@ -6,9 +6,9 @@ from typing import Any
 from uuid import uuid4
 
 from bookkeeping_app.domain_contracts import (
+    AICategorization,
     CanonicalTransaction,
-    CategorizationDecision,
-    DecisionType,
+    CategorizationType,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -73,19 +73,18 @@ def _review_item(
 ) -> TransactionItem:
     suggested = reviewed_row.get("suggested_category")
     proposed = reviewed_row.get("proposed_category")
-    decision_type = (
-        DecisionType.AI_PROPOSED_NEW_CATEGORY
+    categorization_type = (
+        CategorizationType.PROPOSED
         if proposed
-        else DecisionType.AI_SUGGESTION
+        else CategorizationType.SUGGESTED
         if suggested
-        else DecisionType.UNRESOLVED
+        else CategorizationType.NOT_AVAILABLE
     )
     reason = reviewed_row.get("reason") or "No categorization reason was provided."
-    decision = CategorizationDecision(
+    decision = AICategorization(
         decision_id=f"review-{uuid4()}",
-        decision_type=decision_type,
-        suggested_category=suggested,
-        proposed_category=proposed,
+        categorization_type=categorization_type,
+        category=proposed or suggested,
         reason=reason,
     )
     amount_value = source_row.get("amount")
@@ -132,7 +131,7 @@ def _review_item(
 
 
 def _evidence_condition(
-    reviewed_row: dict[str, Any], decision: CategorizationDecision
+    reviewed_row: dict[str, Any], decision: AICategorization
 ) -> EvidenceCondition:
     explicit = reviewed_row.get("evidence_condition")
     if explicit in {condition.value for condition in EvidenceCondition}:

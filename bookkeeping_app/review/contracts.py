@@ -6,7 +6,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
-from bookkeeping_app.domain_contracts import CanonicalTransaction, DecisionType, UserId
+from bookkeeping_app.domain_contracts import (
+    CanonicalTransaction,
+    CategorizationType,
+    UserId,
+)
 
 
 class CategoryOutcome(StrEnum):
@@ -59,9 +63,9 @@ class TransactionItem(BaseModel):
         """Derive the outcome from preserved canonical categorization provenance."""
         decision = self.transaction.ai_categorization
         if decision is not None:
-            if decision.decision_type is DecisionType.AI_SUGGESTION:
+            if decision.categorization_type is CategorizationType.SUGGESTED:
                 return CategoryOutcome.SUGGESTED
-            if decision.decision_type is DecisionType.AI_PROPOSED_NEW_CATEGORY:
+            if decision.categorization_type is CategorizationType.PROPOSED:
                 return CategoryOutcome.PROPOSED
             return CategoryOutcome.UNKNOWN
         if self.transaction.trusted_categorization is not None:

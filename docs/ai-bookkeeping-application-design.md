@@ -283,8 +283,8 @@ Prompt inputs should include:
 
 Every result should return:
 
-- `suggested_category`
-- `decision_type`
+- `category`
+- `categorization_type`
 - `confidence`
 - `reason`
 - `supporting_examples`
@@ -322,9 +322,9 @@ The current API should evolve without breaking the MVP path.
 Response should grow to include:
 
 - `transaction_id`
-- `suggested_category`
+- `category`
 - `confidence`
-- `decision_type`
+- `categorization_type`
 - `reason`
 - `supporting_examples`
 - `needs_review`
@@ -537,6 +537,6 @@ This best matches the current repo direction, the cost-control strategy in the R
 
 1. Implement `memory_retrieval.py` and a deterministic candidate ranking path.
 2. Update `/recategorize-transactions-csv` to run memory-first before model fallback.
-3. Add `decision_type`, `confidence`, and `supporting_examples` to the response shape.
+3. Add `categorization_type`, `confidence`, and `supporting_examples` to the response shape.
 4. Introduce `category_reference.json` and restrict outputs to canonical categories.
 5. Add fixture-based tests that compare deterministic and AI-assisted categorization behavior.

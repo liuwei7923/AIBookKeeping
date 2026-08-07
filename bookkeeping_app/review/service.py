@@ -143,9 +143,9 @@ class ReviewService:
             raise InvalidReviewActionError("conflicting evidence requires correction")
         decision = item.transaction.ai_categorization
         if item.category_outcome is CategoryOutcome.SUGGESTED and decision is not None:
-            return ReviewResolution.CONFIRMED, decision.suggested_category
+            return ReviewResolution.CONFIRMED, decision.category
         if item.category_outcome is CategoryOutcome.PROPOSED and decision is not None:
-            return ReviewResolution.CONFIRMED, decision.proposed_category
+            return ReviewResolution.CONFIRMED, decision.category
         raise InvalidReviewActionError(
             "accept_ai requires a suggested or proposed AI category"
         )

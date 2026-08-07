@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from bookkeeping_app.api import app
 from bookkeeping_app.domain_contracts import (
+    AICategorization,
     CanonicalTransaction,
-    CategorizationDecision,
-    DecisionType,
+    CategorizationType,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -49,16 +49,16 @@ def review_item(
     fingerprint: str | None = None,
 ) -> TransactionItem:
     category_fields: dict[str, str] = {}
-    decision_type = DecisionType.UNRESOLVED
+    categorization_type = CategorizationType.NOT_AVAILABLE
     if outcome is CategoryOutcome.SUGGESTED:
-        decision_type = DecisionType.AI_SUGGESTION
-        category_fields["suggested_category"] = "Groceries"
+        categorization_type = CategorizationType.SUGGESTED
+        category_fields["category"] = "Groceries"
     elif outcome is CategoryOutcome.PROPOSED:
-        decision_type = DecisionType.AI_PROPOSED_NEW_CATEGORY
-        category_fields["proposed_category"] = "EV Charging"
-    decision = CategorizationDecision(
+        categorization_type = CategorizationType.PROPOSED
+        category_fields["category"] = "EV Charging"
+    decision = AICategorization(
         decision_id=f"decision-{transaction_number}",
-        decision_type=decision_type,
+        categorization_type=categorization_type,
         reason="Review this result.",
         **category_fields,
     )
@@ -121,7 +121,7 @@ def test_proposed_accept_ai_preserves_provenance() -> None:
 
     assert resolved.category_outcome is CategoryOutcome.PROPOSED
     assert resolved.transaction.ai_categorization is not None
-    assert resolved.transaction.ai_categorization.proposed_category == "EV Charging"
+    assert resolved.transaction.ai_categorization.category == "EV Charging"
     assert (
         memory_items(memory)[0].ai_categorization == item.transaction.ai_categorization
     )

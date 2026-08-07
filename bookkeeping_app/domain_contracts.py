@@ -22,12 +22,12 @@ def _require_non_blank(value: str, field_name: str) -> str:
     return value
 
 
-class DecisionType(StrEnum):
-    """The AI categorization outcomes supported in the initial workflow."""
+class CategorizationType(StrEnum):
+    """Whether AI suggested a known category, proposed one, or withheld one."""
 
-    AI_SUGGESTION = "ai_suggestion"
-    AI_PROPOSED_NEW_CATEGORY = "ai_proposed_new_category"
-    UNRESOLVED = "unresolved"
+    SUGGESTED = "suggested"
+    PROPOSED = "proposed"
+    NOT_AVAILABLE = "not_available"
 
 
 class TransactionDirection(StrEnum):
@@ -97,15 +97,14 @@ class TrustedCategorization(BaseModel):
         return _require_non_blank(value, "category")
 
 
-class CategorizationDecision(BaseModel):
+class AICategorization(BaseModel):
     """The details and evidence of one AI categorization outcome."""
 
     model_config = ConfigDict(extra="forbid")
 
     decision_id: str
-    decision_type: DecisionType
-    suggested_category: str | None = None
-    proposed_category: str | None = None
+    categorization_type: CategorizationType
+    category: str | None = None
     reason: str
     supporting_memory_ids: list[str] = Field(default_factory=list)
 
@@ -114,7 +113,7 @@ class CategorizationDecision(BaseModel):
     def required_text_must_not_be_blank(cls, value: str, info: ValidationInfo) -> str:
         return _require_non_blank(value, info.field_name)
 
-    @field_validator("suggested_category", "proposed_category")
+    @field_validator("category")
     @classmethod
     def category_must_not_be_blank(
         cls,
@@ -131,17 +130,17 @@ class CategorizationDecision(BaseModel):
         return [_require_non_blank(value, "supporting_memory_id") for value in values]
 
     @model_validator(mode="after")
-    def category_matches_decision_type(self) -> "CategorizationDecision":
-        if self.decision_type is DecisionType.AI_SUGGESTION:
-            if not self.suggested_category or self.proposed_category:
-                raise ValueError("AI suggestion must contain only suggested_category")
-        elif self.decision_type is DecisionType.AI_PROPOSED_NEW_CATEGORY:
-            if not self.proposed_category or self.suggested_category:
+    def category_matches_categorization_type(self) -> "AICategorization":
+        if self.categorization_type in {
+            CategorizationType.SUGGESTED,
+            CategorizationType.PROPOSED,
+        }:
+            if self.category is None:
                 raise ValueError(
-                    "AI category proposal must contain only proposed_category"
+                    "suggested and proposed categorizations need a category"
                 )
-        elif self.suggested_category or self.proposed_category:
-            raise ValueError("unresolved AI decision cannot contain a category")
+        elif self.category is not None:
+            raise ValueError("not_available categorization cannot contain a category")
         return self
 
 
@@ -156,5 +155,5 @@ class CanonicalTransaction(BaseModel):
     direction: TransactionDirection
     identity_quality: TransactionIdentityQuality
     fingerprint: str = Field(min_length=1)
-    ai_categorization: CategorizationDecision | None = None
+    ai_categorization: AICategorization | None = None
     trusted_categorization: TrustedCategorization | None = None
