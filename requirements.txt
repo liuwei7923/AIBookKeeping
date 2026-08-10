@@ -46,7 +46,7 @@ iniconfig==2.3.0
     # via pytest
 jiter==0.16.0
     # via openai
-openai==2.52.0
+openai==2.53.0
     # via -r requirements.in
 packaging==26.2
     # via
