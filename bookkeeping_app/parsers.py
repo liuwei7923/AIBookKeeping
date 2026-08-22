@@ -119,13 +119,25 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
         transactions.append(
             {
                 "date": find_csv_value(
-                    row, ["date", "transaction date", "posted date"]
+                    row,
+                    ["date", "transaction date", "posted date", "date of transaction"],
                 ),
                 "amount": normalize_amount(
-                    find_csv_value(row, ["amount", "transaction amount", "value"])
+                    find_csv_value(
+                        row, ["amount", "transaction amount", "value", "$ amount"]
+                    )
                 ),
                 "merchant": find_csv_value(
-                    row, ["merchant", "description", "payee", "name"]
+                    row,
+                    [
+                        "merchant",
+                        "description",
+                        "payee",
+                        "name",
+                        "original statement",
+                        "statement",
+                        "merchant name or transaction description",
+                    ],
                 ),
                 "category": find_csv_value(row, ["category"]),
             }

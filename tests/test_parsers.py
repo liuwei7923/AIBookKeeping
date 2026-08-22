@@ -28,6 +28,42 @@ def test_parse_csv_transactions_normalizes_common_columns() -> None:
     ]
 
 
+def test_parse_csv_transactions_treats_statement_column_as_merchant() -> None:
+    csv_text = (
+        "date,statement,amount,category\n"
+        "2026-03-02,WHOLEFDS SAN JOSE,-42.19,Groceries\n"
+    )
+
+    transactions = parse_csv_transactions(csv_text)
+
+    assert transactions == [
+        {
+            "date": "2026-03-02",
+            "amount": -42.19,
+            "merchant": "WHOLEFDS SAN JOSE",
+            "category": "Groceries",
+        }
+    ]
+
+
+def test_parse_csv_transactions_supports_credit_card_export_headers() -> None:
+    csv_text = (
+        "Date of Transaction,Merchant Name or Transaction Description,$ Amount\n"
+        "06/15,TARGET T-2581 SAN JOSE CA,-27.51\n"
+    )
+
+    transactions = parse_csv_transactions(csv_text)
+
+    assert transactions == [
+        {
+            "date": "06/15",
+            "amount": -27.51,
+            "merchant": "TARGET T-2581 SAN JOSE CA",
+            "category": None,
+        }
+    ]
+
+
 def test_parse_transactions_normalizes_amount_and_fields() -> None:
     raw_text = '[{"date":"2026-03-01","amount":"-12.50","merchant":" Starbucks ","category":" Coffee "}]'
 
