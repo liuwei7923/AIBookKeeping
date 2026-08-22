@@ -34,6 +34,19 @@ def test_build_canonical_transactions_maps_a_complete_row() -> None:
     assert canonical.identity_quality == TransactionIdentityQuality.COMPLETE
 
 
+def test_build_canonical_transactions_marks_positive_amount_as_credit() -> None:
+    row = {
+        "date": "2026-03-02",
+        "merchant": "Employer Payroll",
+        "amount": 1500.00,
+        "category": None,
+    }
+
+    canonical = build_canonical_transactions([row], user_id=USER_ID).canonical_transactions[0]
+
+    assert canonical.direction == TransactionDirection.CREDIT
+
+
 def test_build_canonical_transactions_preserves_order() -> None:
     rows = [
         {"merchant": "Whole Foods", "amount": -10, "date": None, "category": None},
@@ -48,6 +61,19 @@ def test_build_canonical_transactions_preserves_order() -> None:
         "starbucks",
         "costco",
     ]
+
+
+def test_build_canonical_transactions_assigns_unique_ids_within_a_batch() -> None:
+    rows = [
+        {"merchant": "Whole Foods", "amount": -10, "date": "2026-03-02", "category": None},
+        {"merchant": "Whole Foods", "amount": -10, "date": "2026-03-02", "category": None},
+        {"merchant": "Whole Foods", "amount": -10, "date": "2026-03-02", "category": None},
+    ]
+
+    result = build_canonical_transactions(rows, user_id=USER_ID)
+
+    transaction_ids = [t.source.transaction_id for t in result.canonical_transactions]
+    assert len(set(transaction_ids)) == len(transaction_ids)
 
 
 def test_build_canonical_transactions_fingerprint_is_deterministic() -> None:
