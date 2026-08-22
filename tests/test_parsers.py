@@ -23,16 +23,15 @@ def test_parse_csv_transactions_normalizes_common_columns() -> None:
             "date": "2026-03-02",
             "amount": 1234.5,
             "merchant": "Amazon",
-            "statement": None,
             "category": "Shopping",
         }
     ]
 
 
-def test_parse_csv_transactions_captures_statement_column() -> None:
+def test_parse_csv_transactions_treats_statement_column_as_merchant() -> None:
     csv_text = (
-        "date,merchant,statement,amount,category\n"
-        "2026-03-02,Whole Foods,WHOLEFDS SAN JOSE,-42.19,Groceries\n"
+        "date,statement,amount,category\n"
+        "2026-03-02,WHOLEFDS SAN JOSE,-42.19,Groceries\n"
     )
 
     transactions = parse_csv_transactions(csv_text)
@@ -41,8 +40,7 @@ def test_parse_csv_transactions_captures_statement_column() -> None:
         {
             "date": "2026-03-02",
             "amount": -42.19,
-            "merchant": "Whole Foods",
-            "statement": "WHOLEFDS SAN JOSE",
+            "merchant": "WHOLEFDS SAN JOSE",
             "category": "Groceries",
         }
     ]
