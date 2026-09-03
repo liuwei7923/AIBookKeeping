@@ -1,4 +1,4 @@
-"""OpenAI request helpers for memory-aware category review flows."""
+"""OpenAI request helpers for category review flows."""
 
 import json
 import logging

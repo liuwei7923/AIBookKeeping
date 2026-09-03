@@ -2,7 +2,15 @@
 
 from fastapi import HTTPException, UploadFile
 
-from bookkeeping_app.parsers import is_valid_csv_upload
+from bookkeeping_app.config import ALLOWED_CSV_CONTENT_TYPES
+
+
+def is_valid_csv_upload(file: UploadFile) -> bool:
+    if file.content_type in ALLOWED_CSV_CONTENT_TYPES:
+        return True
+
+    filename = file.filename or ""
+    return filename.lower().endswith(".csv")
 
 
 async def read_csv_upload(file: UploadFile) -> str:
