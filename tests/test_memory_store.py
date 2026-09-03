@@ -14,9 +14,11 @@ from bookkeeping_app.domain_contracts import (
     TrustedCategorizationSource,
 )
 from bookkeeping_app.memory import (
+    CategoryCount,
     FileMemoryStore,
     FingerprintConflictPolicy,
     InMemoryMemoryStore,
+    MemoryEvidence,
     MemoryListQuery,
     MemoryQuery,
     MemoryStore,
@@ -42,6 +44,7 @@ def trusted_transaction(
     user_id: UUID = USER_A,
     fingerprint: str | None = None,
     merchant: str = "whole foods",
+    statement: str = "wholefds 123",
     direction: TransactionDirection = TransactionDirection.DEBIT,
     category: str = "Groceries",
 ) -> CanonicalTransaction:
@@ -52,11 +55,11 @@ def trusted_transaction(
             transaction_id=transaction_id,
             date="2026-03-01",
             merchant="Whole Foods",
-            statement="WHOLEFDS 123",
+            statement=statement,
             amount=Decimal("-42.19"),
         ),
         normalized_merchant=merchant,
-        normalized_statement="wholefds 123",
+        normalized_statement=statement,
         direction=direction,
         identity_quality=TransactionIdentityQuality.COMPLETE,
         fingerprint=fingerprint or f"sha256:{transaction_number:064x}",
@@ -103,6 +106,31 @@ def test_record_rejects_transaction_without_trusted_category(
     )
 
 
+def test_record_rejects_identity_insufficient_transaction(
+    memory_store: MemoryStore,
+) -> None:
+    transaction = trusted_transaction(1).model_copy(
+        update={"identity_quality": TransactionIdentityQuality.PARTIAL}
+    )
+
+    result = memory_store.record_trusted(
+        [RecordTrustedCommand(transaction=transaction)]
+    )
+
+    assert result.items[0].status is MemoryWriteStatus.REJECTED
+    assert (
+        memory_store.list_for_user(MemoryListQuery(user_id=USER_A)).transactions == ()
+    )
+    found = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+        )
+    )
+    assert found.candidates == ()
+
+
 def test_same_fingerprint_and_category_is_duplicate(
     memory_store: MemoryStore,
 ) -> None:
@@ -114,6 +142,28 @@ def test_same_fingerprint_and_category_is_duplicate(
 
     assert result.items[0].status is MemoryWriteStatus.DUPLICATE
     assert result.items[0].conflicting_transaction_ids == (first.source.transaction_id,)
+
+
+def test_find_relevant_excludes_duplicate_evidence(memory_store: MemoryStore) -> None:
+    first = trusted_transaction(1, fingerprint="sha256:same")
+    duplicate = trusted_transaction(2, fingerprint="sha256:same")
+    memory_store.record_trusted(
+        [
+            RecordTrustedCommand(transaction=first),
+            RecordTrustedCommand(transaction=duplicate),
+        ]
+    )
+
+    result = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+        )
+    )
+
+    assert len(result.candidates) == 1
+    assert result.category_counts == (CategoryCount(category="Groceries", count=1),)
 
 
 def test_conflicting_category_is_rejected_by_default(
@@ -171,6 +221,103 @@ def test_replacement_policy_requires_reason() -> None:
         )
 
 
+def test_find_relevant_returns_empty_result_when_no_matches(
+    memory_store: MemoryStore,
+) -> None:
+    result = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+        )
+    )
+
+    assert result.candidates == ()
+    assert result.category_counts == ()
+
+
+def test_find_relevant_preserves_conflicting_category_evidence_across_fingerprints(
+    memory_store: MemoryStore,
+) -> None:
+    groceries = trusted_transaction(1, fingerprint="sha256:one", category="Groceries")
+    shopping = trusted_transaction(2, fingerprint="sha256:two", category="Shopping")
+    memory_store.record_trusted(
+        [
+            RecordTrustedCommand(transaction=groceries),
+            RecordTrustedCommand(transaction=shopping),
+        ]
+    )
+
+    result = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+        )
+    )
+
+    assert len(result.candidates) == 2
+    assert result.category_counts == (
+        CategoryCount(category="Groceries", count=1),
+        CategoryCount(category="Shopping", count=1),
+    )
+
+
+def test_find_relevant_ranks_by_statement_similarity(
+    memory_store: MemoryStore,
+) -> None:
+    exact = trusted_transaction(1, fingerprint="sha256:one", statement="wholefds 123")
+    unrelated = trusted_transaction(
+        2, fingerprint="sha256:two", statement="totally different text"
+    )
+    memory_store.record_trusted(
+        [
+            RecordTrustedCommand(transaction=unrelated),
+            RecordTrustedCommand(transaction=exact),
+        ]
+    )
+
+    result = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+            normalized_statement="wholefds 123",
+        )
+    )
+
+    assert result.candidates[0].evidence_id == exact.source.transaction_id
+
+
+def test_find_relevant_limits_candidates_but_not_category_counts(
+    memory_store: MemoryStore,
+) -> None:
+    transactions = [
+        trusted_transaction(number, fingerprint=f"sha256:limit-{number}")
+        for number in range(1, 8)
+    ]
+    memory_store.record_trusted(
+        [RecordTrustedCommand(transaction=t) for t in transactions]
+    )
+
+    result = memory_store.find_relevant(
+        MemoryQuery(
+            user_id=USER_A,
+            normalized_merchant="whole foods",
+            direction=TransactionDirection.DEBIT,
+            limit=5,
+        )
+    )
+
+    assert len(result.candidates) == 5
+    assert sum(count.count for count in result.category_counts) == 7
+
+
+def test_memory_evidence_excludes_internal_persistence_metadata() -> None:
+    assert "user_id" not in MemoryEvidence.model_fields
+    assert "fingerprint" not in MemoryEvidence.model_fields
+
+
 def test_find_relevant_isolates_user_merchant_and_direction(
     memory_store: MemoryStore,
 ) -> None:
@@ -201,7 +348,10 @@ def test_find_relevant_isolates_user_merchant_and_direction(
         )
     )
 
-    assert result == (matching,)
+    assert [candidate.evidence_id for candidate in result.candidates] == [
+        matching.source.transaction_id
+    ]
+    assert result.category_counts == (CategoryCount(category="Groceries", count=1),)
 
 
 def test_list_for_user_uses_stable_cursor_pagination(
