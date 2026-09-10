@@ -64,3 +64,11 @@ _Avoid_: Unknown categorization
 **Recategorization Batch**:
 An ordered set of canonical transactions and their categorization decisions produced for one request, together with its processing outcome.
 _Avoid_: Review queue, OpenAI batch
+
+**Local Categorization Decision**:
+A Categorization Decision reached deterministically from Categorization Memory alone, without AI assistance. Conservative by design: it resolves to an Accepted Category only under exact statement agreement or Merchant Consensus, and to Unknown Categorization otherwise.
+_Avoid_: AI decision, suggestion
+
+**Merchant Consensus**:
+The rule that a category becomes an Accepted Category when a configured number of distinct, unanimous Categorization Memory examples share the same merchant and direction. The default threshold is two.
+_Avoid_: Majority vote, best guess
