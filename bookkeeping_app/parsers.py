@@ -1,44 +1,13 @@
-"""Parsing and normalization utilities for CSV input and model JSON output."""
+"""Parsing utilities for CSV input and model JSON output."""
 
 import csv
 import json
-import re
 from io import StringIO
 from typing import Any
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 
-from bookkeeping_app.config import ALLOWED_CSV_CONTENT_TYPES
-
-CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
-
-
-def sanitize_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-
-    cleaned = CONTROL_CHAR_PATTERN.sub("", value).strip()
-    return cleaned or None
-
-
-def normalize_amount(value: Any) -> float | None:
-    if value is None:
-        return None
-
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if not isinstance(value, str):
-        return None
-
-    cleaned = value.strip().replace("$", "").replace(",", "")
-    if not cleaned:
-        return None
-
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
+from bookkeeping_app.normalization import normalize_amount, sanitize_text
 
 
 def parse_json_array(raw_text: str) -> list[dict[str, Any]]:
@@ -144,11 +113,3 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
         )
 
     return transactions
-
-
-def is_valid_csv_upload(file: UploadFile) -> bool:
-    if file.content_type in ALLOWED_CSV_CONTENT_TYPES:
-        return True
-
-    filename = file.filename or ""
-    return filename.lower().endswith(".csv")

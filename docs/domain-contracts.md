@@ -106,7 +106,40 @@ AI suggestion, or a corrected AI suggestion. Bank-statement categories remain
 untrusted until user review. Its presence makes the Canonical Transaction
 eligible for Categorization Memory.
 
+## Local Categorization Decision
+
+`decide_categorization` (`bookkeeping_app/categorization_decision.py`) turns
+one `MemoryQuery` and its `MemoryQueryResult` (see the Memory Store design
+doc) into a `LocalCategorizationDecision`, using trusted memory alone. It is
+pure: no file, HTTP, metrics, or OpenAI operations.
+
+| Decision type | Fields |
+| --- | --- |
+| `accepted` | Requires `category` and a non-`none` `evidence_confidence`; requires non-empty `supporting_memory_ids`. |
+| `unknown` | Forbids `category`; requires `evidence_confidence` of `none`. |
+
+Every decision carries a concise, non-blank `reason`.
+
+Rules, evaluated in order:
+
+1. **Exact statement match** — if the trusted candidates whose
+   `normalized_statement` exactly matches the query's statement unanimously
+   agree on one category, accept it with `high` confidence.
+2. **Merchant consensus** — otherwise, if `category_counts` (aggregated over
+   all distinct relevant trusted evidence, not just the ranked candidates)
+   contains exactly one category and its count meets
+   `merchant_consensus_threshold` (default
+   `DEFAULT_MERCHANT_CONSENSUS_THRESHOLD` in `config.py`, currently `2`),
+   accept it with `consensus` confidence.
+3. **Otherwise** — the decision is `unknown`. This covers missing, weak,
+   incomplete, or conflicting evidence, including a single example that does
+   not meet the consensus threshold.
+
+Consensus is evaluated from `category_counts`, not from the length of
+`candidates`, so it cannot be satisfied by evidence that does not correspond
+to distinct trusted fingerprints. Amount proximity is only a ranking signal
+inside `MemoryQueryResult`; it never triggers a decision on its own.
+
 ## Deferred Contracts
 
-Deterministic categorization types, confidence calculation,
-`RecategorizationBatch`, and batch summary counts are intentionally deferred.
+`RecategorizationBatch` and batch summary counts are intentionally deferred.

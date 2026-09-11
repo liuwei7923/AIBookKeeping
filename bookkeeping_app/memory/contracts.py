@@ -1,12 +1,14 @@
 """Public contracts for trusted categorization-memory persistence."""
 
 from collections.abc import Sequence
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from bookkeeping_app.config import DEFAULT_MEMORY_CANDIDATE_LIMIT
 from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
     TransactionDirection,
@@ -81,6 +83,41 @@ class MemoryQuery(BaseModel):
     user_id: UserId
     normalized_merchant: str = Field(min_length=1)
     direction: TransactionDirection
+    normalized_statement: str | None = None
+    original_category: str | None = None
+    amount: Decimal | None = None
+    limit: int = Field(default=DEFAULT_MEMORY_CANDIDATE_LIMIT, ge=1, le=50)
+
+
+class MemoryEvidence(BaseModel):
+    """Model-facing categorization-memory evidence, excluding persistence metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_id: UUID
+    normalized_statement: str | None = None
+    date: str | None = None
+    amount: Decimal | None = None
+    original_category: str | None = None
+    category: str
+
+
+class CategoryCount(BaseModel):
+    """Aggregate count of one trusted category among relevant distinct evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    count: int = Field(ge=1)
+
+
+class MemoryQueryResult(BaseModel):
+    """Ranked, limited evidence plus aggregate counts over all relevant evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: tuple[MemoryEvidence, ...]
+    category_counts: tuple[CategoryCount, ...]
 
 
 class MemoryListQuery(BaseModel):
@@ -116,8 +153,8 @@ class MemoryStore(Protocol):
     def find_relevant(
         self,
         query: MemoryQuery,
-    ) -> tuple[CanonicalTransaction, ...]:
-        """Find trusted transactions for the same user, merchant, and direction."""
+    ) -> MemoryQueryResult:
+        """Find and rank trusted evidence for the same user, merchant, and direction."""
         ...
 
     def list_for_user(self, query: MemoryListQuery) -> MemoryPage:

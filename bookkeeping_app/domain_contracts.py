@@ -145,6 +145,63 @@ class CategorizationDecision(BaseModel):
         return self
 
 
+class LocalDecisionType(StrEnum):
+    """Deterministic categorization-memory outcomes for one transaction."""
+
+    ACCEPTED = "accepted"
+    UNKNOWN = "unknown"
+
+
+class EvidenceConfidence(StrEnum):
+    """How strongly trusted memory evidence supports a local decision."""
+
+    HIGH = "high"
+    CONSENSUS = "consensus"
+    NONE = "none"
+
+
+class LocalCategorizationDecision(BaseModel):
+    """A deterministic categorization conclusion drawn from trusted memory alone."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision_type: LocalDecisionType
+    category: str | None = None
+    evidence_confidence: EvidenceConfidence
+    reason: str
+    supporting_memory_ids: tuple[UUID, ...] = ()
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_not_be_blank(cls, value: str) -> str:
+        return _require_non_blank(value, "reason")
+
+    @field_validator("category")
+    @classmethod
+    def category_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_blank(value, "category")
+
+    @model_validator(mode="after")
+    def category_matches_decision_type(self) -> "LocalCategorizationDecision":
+        if self.decision_type is LocalDecisionType.ACCEPTED:
+            if self.category is None:
+                raise ValueError("accepted local decision requires a category")
+            if self.evidence_confidence is EvidenceConfidence.NONE:
+                raise ValueError(
+                    "accepted local decision requires a non-none evidence confidence"
+                )
+            if not self.supporting_memory_ids:
+                raise ValueError("accepted local decision requires supporting memory")
+        else:
+            if self.category is not None:
+                raise ValueError("unknown local decision cannot contain a category")
+            if self.evidence_confidence is not EvidenceConfidence.NONE:
+                raise ValueError("unknown local decision must have none confidence")
+        return self
+
+
 class CanonicalTransaction(BaseModel):
     """A processed transaction with canonical identity and categorization state."""
 

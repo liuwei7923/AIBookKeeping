@@ -1,9 +1,6 @@
+from bookkeeping_app.normalization import sanitize_text
 from bookkeeping_app.openai_service import build_category_review_input
-from bookkeeping_app.parsers import (
-    parse_csv_transactions,
-    parse_transactions,
-    sanitize_text,
-)
+from bookkeeping_app.parsers import parse_csv_transactions, parse_transactions
 
 
 def test_sanitize_text_removes_control_characters() -> None:

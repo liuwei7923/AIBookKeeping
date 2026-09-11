@@ -19,6 +19,7 @@ from bookkeeping_app.memory.contracts import (
     MemoryListQuery,
     MemoryPage,
     MemoryQuery,
+    MemoryQueryResult,
     MemoryWriteResult,
     RecordTrustedCommand,
 )
@@ -46,7 +47,7 @@ class FileMemoryStore:
     def find_relevant(
         self,
         query: MemoryQuery,
-    ) -> tuple[CanonicalTransaction, ...]:
+    ) -> MemoryQueryResult:
         with self._lock:
             return find_relevant_transactions(self._load(), query)
 
