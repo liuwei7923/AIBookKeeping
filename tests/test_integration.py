@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-import httpx
+import httpx2 as httpx
 import pytest
 
 TEST_USER_ID = "8a802680-06be-4815-986b-58b88392acfc"
