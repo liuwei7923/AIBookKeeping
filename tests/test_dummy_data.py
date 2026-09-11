@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from bookkeeping_app.domain_contracts import (
-    DecisionType,
+    CategorizationType,
     SourceTransaction,
 )
 from scripts.dummy_data import (
@@ -94,34 +94,32 @@ def test_dummy_dataset_covers_manual_judgment_ui_states() -> None:
     )
     assert any(
         item.ai_categorization is not None
-        and item.ai_categorization.decision_type is DecisionType.AI_SUGGESTION
+        and item.ai_categorization.categorization_type is CategorizationType.SUGGESTED
         and item.trusted_categorization is None
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
-        and item.ai_categorization.decision_type
-        is DecisionType.AI_PROPOSED_NEW_CATEGORY
+        and item.ai_categorization.categorization_type is CategorizationType.PROPOSED
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
-        and item.ai_categorization.decision_type is DecisionType.UNRESOLVED
+        and item.ai_categorization.categorization_type
+        is CategorizationType.NOT_AVAILABLE
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
         and item.trusted_categorization is not None
-        and item.ai_categorization.suggested_category
-        == item.trusted_categorization.category
+        and item.ai_categorization.category == item.trusted_categorization.category
         for item in transactions
     )
     assert any(
         item.ai_categorization is not None
-        and item.ai_categorization.suggested_category is not None
+        and item.ai_categorization.category is not None
         and item.trusted_categorization is not None
-        and item.ai_categorization.suggested_category
-        != item.trusted_categorization.category
+        and item.ai_categorization.category != item.trusted_categorization.category
         for item in transactions
     )
     assert any(

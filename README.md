@@ -63,7 +63,9 @@ The repository currently includes:
 - deterministic CSV parsing and normalization
 - OpenAI-assisted CSV recategorization
 - local JSON categorization-memory storage
+- process-local transaction review sessions
 - read-only categorization-memory inspection endpoint
+- user-scoped review-item list, detail, and resolution endpoints
 - OpenAI request counting and request logging
 - parser, memory, API, and live-server tests
 
@@ -85,15 +87,16 @@ flowchart LR
     ENGINE --> REVIEW["Review Queue"]
     ENGINE --> METRICS["Metrics"]
     MEMORY --> MEMORY_FILE["categorization_memory.json"]
-    REVIEW --> REVIEW_FILE["review_queue.json"]
+    REVIEW --> SESSION["In-process review session"]
 ```
 
 The Recategorization Engine is the primary domain module. It will hide memory
 retrieval, deterministic decision rules, AI routing, batching, confidence
 assignment, and result ordering behind one batch-oriented interface.
 
-The Review Queue is shown as part of the target architecture but is deferred to
-Phase 2.
+The review queue is a filtered view of canonical transaction items held only in
+the current application process. Batch approval, durable recovery, retry, and
+process-safe resumption remain deferred to Phase 2.
 
 ## Iterative Roadmap
 
@@ -297,7 +300,8 @@ Current behavior:
 
 - parses the uploaded CSV
 - sends every parsed transaction to OpenAI
-- returns a JSON array of category suggestions
+- creates one pending review item for every AI result
+- returns a JSON array of category suggestions with transaction IDs
 
 ```bash
 curl -X POST \
@@ -313,6 +317,7 @@ Current response shape:
     "date": "2026-03-24",
     "amount": -7.0,
     "merchant": "Electrify America",
+    "transaction_id": "23d81053-8281-4f31-94eb-b2bc02753ae7",
     "original_category": "Gas",
     "suggested_category": "Electric Vehicle Charging",
     "reason": "The merchant is an electric vehicle charging provider."
@@ -332,8 +337,40 @@ bookkeeping_app/routes/
   health.py
   admin.py
   categorization_memory.py
+  transaction_reviews.py
   transactions.py
 ```
+
+### Transaction review views
+
+Transaction reads are scoped to the active `X-User-Id` identity:
+
+- `GET /transactions?review_status=todo` lists process-local transactions that
+  still need review.
+- `GET /transactions?review_status=completed` lists completed transactions from
+  the durable Review Record Store. Use `review_resolution` to filter them.
+- `GET /transactions/{transaction_id}` returns one owned To Do or Completed
+  transaction.
+- `POST /transaction-reviews` completes one or more reviews using a generic
+  `reviewed_category` for each transaction.
+- `GET /transaction-reviews` exposes durable Review Records for audit and
+  analysis.
+
+The backend derives the resolution: matching a non-conflicting Suggested or
+Proposed AI category is Confirmed, a different nonblank category is Corrected,
+and `null` is Kept Unknown. Identical repeated submissions are idempotent; a
+different second submission returns HTTP 409. Cross-user access returns HTTP
+404.
+
+Pending and Kept Unknown items never enter categorization memory. Confirmed and
+Corrected items preserve their original `ai_categorization` and are recorded
+through `MemoryStore.record_trusted()` with `confirmed_ai_suggestion` or
+`corrected_ai_suggestion` provenance. A duplicate memory write succeeds; a
+fingerprint conflict returns HTTP 409 and leaves the review item pending.
+
+To Do review state is intentionally ephemeral in this MVP and disappears when
+the server restarts. Completed Review Records are durable. Deployments should
+use one application worker until durable To Do recovery is introduced.
 
 ## User Workflow
 
@@ -341,11 +378,12 @@ A typical workflow is:
 
 1. Upload a bank-statement CSV through `POST /transactions`.
 2. Review and label the returned transactions.
-3. Persist each explicit decision through the review workflow (to be added).
-4. Inspect stored decisions through `GET /categorization-memory`.
+3. Persist explicit decisions through batch `POST /transaction-reviews`.
+4. Inspect completed reviews through `GET /transaction-reviews`.
+5. Inspect trusted evidence through `GET /categorization-memory`.
 
-The current API does not yet persist user confirmations or promote reviewed
-suggestions into trusted memory.
+The current API promotes only confirmed or corrected categories into trusted
+memory.
 
 ## Cost Control Strategy
 
@@ -399,6 +437,7 @@ Optional memory path override:
 
 ```env
 CATEGORIZATION_MEMORY_PATH=data/categorization_memory.json
+REVIEW_RECORD_PATH=data/review_records.json
 ```
 
 The checked-in development-user catalog lives at

@@ -5,9 +5,9 @@ import pytest
 from pydantic import ValidationError
 
 from bookkeeping_app.domain_contracts import (
+    AICategorization,
     CanonicalTransaction,
-    CategorizationDecision,
-    DecisionType,
+    CategorizationType,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -117,78 +117,71 @@ def test_trusted_categorization_rejects_blank_category() -> None:
 
 
 def test_ai_suggestion_records_category_reason_and_supporting_memory() -> None:
-    decision = CategorizationDecision(
+    decision = AICategorization(
         decision_id="decision-1",
-        decision_type=DecisionType.AI_SUGGESTION,
-        suggested_category="Electric Vehicle Charging",
+        categorization_type=CategorizationType.SUGGESTED,
+        category="Electric Vehicle Charging",
         reason="The merchant and statement describe an EV charging session.",
         supporting_memory_ids=["memory-1"],
     )
 
-    assert decision.suggested_category == "Electric Vehicle Charging"
-    assert decision.proposed_category is None
+    assert decision.category == "Electric Vehicle Charging"
     assert decision.supporting_memory_ids == ["memory-1"]
 
 
-def test_ai_new_category_proposal_uses_only_proposed_category() -> None:
+def test_ai_new_category_proposal_uses_shared_category_field() -> None:
     fields = {
         "decision_id": "decision-2",
-        "decision_type": DecisionType.AI_PROPOSED_NEW_CATEGORY,
-        "proposed_category": "Electric Vehicle Charging",
+        "categorization_type": CategorizationType.PROPOSED,
+        "category": "Electric Vehicle Charging",
         "reason": "No existing category describes an EV charging session.",
     }
 
-    decision = CategorizationDecision(**fields)
+    decision = AICategorization(**fields)
 
-    assert decision.proposed_category == "Electric Vehicle Charging"
-    assert decision.suggested_category is None
-
-    with pytest.raises(ValidationError):
-        CategorizationDecision(**(fields | {"suggested_category": "Transportation"}))
+    assert decision.category == "Electric Vehicle Charging"
 
 
 @pytest.mark.parametrize(
-    ("decision_type", "category_field"),
+    "categorization_type",
     [
-        (DecisionType.AI_SUGGESTION, "suggested_category"),
-        (DecisionType.AI_PROPOSED_NEW_CATEGORY, "proposed_category"),
+        CategorizationType.SUGGESTED,
+        CategorizationType.PROPOSED,
     ],
 )
 def test_ai_category_values_must_not_be_blank(
-    decision_type: DecisionType,
-    category_field: str,
+    categorization_type: CategorizationType,
 ) -> None:
     with pytest.raises(ValidationError):
-        CategorizationDecision(
+        AICategorization(
             decision_id="decision-blank-category",
-            decision_type=decision_type,
+            categorization_type=categorization_type,
+            category=" ",
             reason="AI returned an unusable category.",
-            **{category_field: " "},
         )
 
 
 def test_unresolved_ai_decision_contains_no_category() -> None:
     fields = {
         "decision_id": "decision-3",
-        "decision_type": DecisionType.UNRESOLVED,
+        "categorization_type": CategorizationType.NOT_AVAILABLE,
         "reason": "The available evidence is conflicting.",
         "supporting_memory_ids": ["memory-2", "memory-3"],
     }
 
-    decision = CategorizationDecision(**fields)
+    decision = AICategorization(**fields)
 
-    assert decision.suggested_category is None
-    assert decision.proposed_category is None
+    assert decision.category is None
 
     with pytest.raises(ValidationError):
-        CategorizationDecision(**(fields | {"suggested_category": "Transportation"}))
+        AICategorization(**(fields | {"category": "Transportation"}))
 
 
 def test_ai_decision_rejects_blank_supporting_memory_id() -> None:
     with pytest.raises(ValidationError):
-        CategorizationDecision(
+        AICategorization(
             decision_id="decision-4",
-            decision_type=DecisionType.UNRESOLVED,
+            categorization_type=CategorizationType.NOT_AVAILABLE,
             reason="The available evidence is conflicting.",
             supporting_memory_ids=["memory-1", " "],
         )
@@ -203,10 +196,10 @@ def test_canonical_transaction_keeps_source_identity_and_both_categorizations() 
         amount=-7.0,
         original_category="Gas",
     )
-    ai_decision = CategorizationDecision(
+    ai_decision = AICategorization(
         decision_id="decision-1",
-        decision_type=DecisionType.AI_SUGGESTION,
-        suggested_category="Electric Vehicle Charging",
+        categorization_type=CategorizationType.SUGGESTED,
+        category="Electric Vehicle Charging",
         reason="The transaction describes an EV charging session.",
     )
     trusted_categorization = TrustedCategorization(
