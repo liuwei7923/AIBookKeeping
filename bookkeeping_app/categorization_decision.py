@@ -9,7 +9,11 @@ from bookkeeping_app.domain_contracts import (
     LocalCategorizationDecision,
     LocalDecisionType,
 )
-from bookkeeping_app.memory.contracts import MemoryEvidence, MemoryQuery, MemoryQueryResult
+from bookkeeping_app.memory.contracts import (
+    MemoryEvidence,
+    MemoryQuery,
+    MemoryQueryResult,
+)
 
 
 def decide_categorization(

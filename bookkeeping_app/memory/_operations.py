@@ -134,7 +134,9 @@ def find_relevant_transactions(
 
     category_counts = _category_counts(matches)
     ranked = sorted(matches, key=lambda transaction: _rank_key(transaction, query))
-    candidates = tuple(_to_evidence(transaction) for transaction in ranked[: query.limit])
+    candidates = tuple(
+        _to_evidence(transaction) for transaction in ranked[: query.limit]
+    )
 
     return MemoryQueryResult(candidates=candidates, category_counts=category_counts)
 

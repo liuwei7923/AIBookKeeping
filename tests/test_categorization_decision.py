@@ -7,7 +7,12 @@ from bookkeeping_app.domain_contracts import (
     LocalDecisionType,
     TransactionDirection,
 )
-from bookkeeping_app.memory import CategoryCount, MemoryEvidence, MemoryQuery, MemoryQueryResult
+from bookkeeping_app.memory import (
+    CategoryCount,
+    MemoryEvidence,
+    MemoryQuery,
+    MemoryQueryResult,
+)
 
 USER_A = UUID("550e8400-e29b-41d4-a716-446655440000")
 
