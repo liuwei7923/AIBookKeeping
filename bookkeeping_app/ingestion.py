@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
+    MerchantIdentificationStatus,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -41,7 +42,15 @@ def _build_fingerprint(
     normalized_merchant: str,
     amount: Decimal | None,
 ) -> str:
-    fingerprint_input = f"{date}|{normalized_merchant}|{amount}"
+    if amount is None:
+        amount_key = "None"
+    elif amount.is_zero():
+        amount_key = "0"
+    else:
+        amount_key = format(amount, "f")
+        if "." in amount_key:
+            amount_key = amount_key.rstrip("0").rstrip(".")
+    fingerprint_input = f"{date}|{normalized_merchant}|{amount_key}"
     return f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
 
 
@@ -57,21 +66,37 @@ def build_canonical_transactions(
         amount = row.get("amount")
         decimal_amount = Decimal(str(amount)) if amount is not None else None
         merchant = row.get("merchant")
+        description = (
+            row.get("source_description")
+            or row.get("description")
+            or row.get("statement")
+        )
+        if row.get("confirmed_merchant") is not None:
+            raise ValueError(
+                "confirmed_merchant cannot be supplied by transaction ingestion"
+            )
         source = SourceTransaction(
             user_id=user_id,
             date=row.get("date"),
             merchant=merchant,
-            # Bridge until #54 (drop the separate statement field) is
-            # decided: keep statement in sync with merchant so existing
-            # downstream readers (e.g. the categorization-memory route)
-            # don't silently see a null value.
-            statement=merchant,
+            # Preserve the legacy merchant fallback only when no statement was supplied.
+            statement=description or merchant,
             amount=decimal_amount,
             original_category=row.get("category"),
+            post_date=row.get("post_date"),
+            transaction_type=row.get("type"),
+            memo=row.get("memo"),
+            source_description=description,
+            merchant_status=(
+                MerchantIdentificationStatus.SOURCE_PROVIDED
+                if merchant
+                else MerchantIdentificationStatus.UNKNOWN
+            ),
         )
         normalized_merchant = normalize_merchant(source.merchant)
+        normalized_description = normalize_merchant(description)
 
-        if not normalized_merchant:
+        if not normalized_merchant and not normalized_description:
             incomplete_sources.append(source)
             continue
 
@@ -79,7 +104,7 @@ def build_canonical_transactions(
             CanonicalTransaction(
                 source=source,
                 normalized_merchant=normalized_merchant,
-                normalized_statement=normalized_merchant,
+                normalized_statement=normalized_description or normalized_merchant,
                 direction=(
                     TransactionDirection.CREDIT
                     if amount is not None and amount >= 0
@@ -91,7 +116,9 @@ def build_canonical_transactions(
                 ),
                 fingerprint=_build_fingerprint(
                     date=source.date,
-                    normalized_merchant=normalized_merchant,
+                    normalized_merchant=normalized_merchant
+                    or normalized_description
+                    or "",
                     amount=decimal_amount,
                 ),
             )

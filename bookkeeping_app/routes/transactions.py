@@ -4,6 +4,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from bookkeeping_app.domain_contracts import UserId
@@ -37,6 +38,6 @@ async def create_transactions(
         len(reviewed_transactions),
     )
     return JSONResponse(
-        content=reviewed_transactions,
+        content=jsonable_encoder(reviewed_transactions),
         headers={"X-User-Id": str(user_id)},
     )

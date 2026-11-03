@@ -21,6 +21,12 @@ _Avoid_: Raw transaction
 A processed transaction represented in the application's shared vocabulary while preserving its source values, ownership, and normalized identity. Its identifier is globally unique and remains stable throughout the transaction's lifetime.
 _Avoid_: Parsed row, API transaction, clean transaction
 
+**Merchant**:
+The business associated with a transaction, identified from source information or specified by the user. A source description is not itself necessarily a merchant, and some transactions may have no merchant.
+
+**Trusted Merchant Identification**:
+A merchant explicitly selected or corrected by the user for a transaction. It may be reused as evidence for future transactions.
+
 **Categorization Decision**:
 The application's conclusion about a transaction's category, including the evidence and certainty supporting that conclusion.
 _Avoid_: Prediction, label

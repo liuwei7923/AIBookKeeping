@@ -513,3 +513,9 @@ The current implementation does not yet include:
 - streaming
 - fine-tuning
 - general ledger, invoicing, payroll, tax filing, or autonomous accounting-system posting
+# Merchant confirmation storage
+
+Transaction descriptions from statement imports remain source data, not user-confirmed merchant identities. `FileMerchantStore` stores explicit, user-scoped confirmations and performs exact lookup after normalizing case, punctuation, and whitespace. Conflicting confirmations are retained and lookup reports ambiguity. Explicit correction deactivates prior evidence while retaining history. Per-path in-process locks coordinate instances in one process; advisory `fcntl` locks additionally coordinate file operations across processes on macOS/Linux. Platforms without `fcntl` require a single writer; network-filesystem locking semantics are not guaranteed. This seam is deterministic and does not invoke a model or provide review UI. Synthetic Chase-shaped parser coverage lives in `tests/sample_csvs/synthetic_chase.csv`.
+
+No migration of older categorization-memory fingerprints is included; this
+project is starting with no existing memory data to preserve.
