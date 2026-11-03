@@ -1,0 +1,7 @@
+Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+03/01/2026,03/02/2026,WHOLEFDS MKT 10234 SAN JOSE CA,Groceries,Sale,-42.19,Weekly groceries
+03/03/2026,03/04/2026,STARBUCKS STORE 042 SEATTLE WA,Coffee,Sale,-12.50,
+03/05/2026,03/05/2026,ONLINE TRANSFER TO SAVINGS,Transfer,Transfer,-100.00,Monthly savings
+03/06/2026,03/07/2026,ADOBE *CREATIVE CLOUD,Software,Sale,-29.99,Subscription
+03/08/2026,03/09/2026,PAYROLL DEPOSIT,Income,Credit,2500.00,March salary
+"""

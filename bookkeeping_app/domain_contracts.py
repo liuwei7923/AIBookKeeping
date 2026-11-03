@@ -68,6 +68,16 @@ class User(BaseModel):
         return _require_non_blank(value, "display_name").strip()
 
 
+class MerchantIdentificationStatus(StrEnum):
+    """How a merchant value was established for a transaction."""
+
+    UNKNOWN = "unknown"
+    SOURCE_PROVIDED = "source_provided"
+    INFERRED = "inferred"
+    USER_CONFIRMED = "user_confirmed"
+    USER_CORRECTED = "user_corrected"
+
+
 class SourceTransaction(BaseModel):
     """Transaction values preserved as received from a source."""
 
@@ -76,10 +86,14 @@ class SourceTransaction(BaseModel):
     user_id: UserId
     transaction_id: UUID = Field(default_factory=uuid4)
     date: str | None = None
+    post_date: str | None = None
     merchant: str | None = None
+    description: str | None = None
     statement: str | None = None
     amount: Decimal | None = None
     original_category: str | None = None
+    transaction_type: str | None = None
+    memo: str | None = None
 
 
 class TrustedCategorization(BaseModel):
@@ -215,3 +229,38 @@ class CanonicalTransaction(BaseModel):
     fingerprint: str = Field(min_length=1)
     ai_categorization: CategorizationDecision | None = None
     trusted_categorization: TrustedCategorization | None = None
+
+
+class TrustedMerchantIdentificationSource(StrEnum):
+    """How a trusted merchant identification was established."""
+
+    USER_CONFIRMED = "user_confirmed"
+    USER_CORRECTED = "user_corrected"
+
+
+class TrustedMerchantIdentification(BaseModel):
+    """A merchant explicitly confirmed by a user for a source description."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    identification_id: UUID = Field(default_factory=uuid4)
+    user_id: UserId
+    source_description: str
+    normalized_description: str = Field(min_length=1)
+    merchant: str
+    normalized_merchant: str | None = None
+    source: TrustedMerchantIdentificationSource = (
+        TrustedMerchantIdentificationSource.USER_CONFIRMED
+    )
+    transaction_id: UUID | None = None
+    active: bool = True
+
+    @field_validator("source_description", "merchant")
+    @classmethod
+    def text_must_not_be_blank(cls, value: str, info: ValidationInfo) -> str:
+        return _require_non_blank(value, info.field_name)
+
+    @field_validator("normalized_description")
+    @classmethod
+    def normalized_description_must_not_be_blank(cls, value: str) -> str:
+        return _require_non_blank(value, "normalized_description")

@@ -85,31 +85,54 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
         if not row:
             continue
 
-        transactions.append(
-            {
-                "date": find_csv_value(
-                    row,
-                    ["date", "transaction date", "posted date", "date of transaction"],
-                ),
-                "amount": normalize_amount(
-                    find_csv_value(
-                        row, ["amount", "transaction amount", "value", "$ amount"]
-                    )
-                ),
-                "merchant": find_csv_value(
-                    row,
-                    [
-                        "merchant",
-                        "description",
-                        "payee",
-                        "name",
-                        "original statement",
-                        "statement",
-                        "merchant name or transaction description",
-                    ],
-                ),
-                "category": find_csv_value(row, ["category"]),
-            }
+        description = find_csv_value(
+            row,
+            [
+                "description",
+                "statement",
+                "original statement",
+                "merchant name or transaction description",
+                "details",
+            ],
         )
+        merchant = find_csv_value(
+            row,
+            [
+                "merchant",
+                "payee",
+                "name",
+                "merchant name",
+            ],
+        )
+        transaction = {
+            "date": find_csv_value(
+                row,
+                [
+                    "transaction date",
+                    "date",
+                    "date of transaction",
+                    "posted date",
+                    "post date",
+                ],
+            ),
+            "amount": normalize_amount(
+                find_csv_value(
+                    row, ["amount", "transaction amount", "value", "$ amount"]
+                )
+            ),
+            "merchant": merchant,
+            "category": find_csv_value(row, ["category"]),
+        }
+        if description is not None:
+            transaction["statement"] = description
+        for output_key, headers in (
+            ("post_date", ["post date", "posted date", "posting date"]),
+            ("type", ["type", "transaction type"]),
+            ("memo", ["memo", "notes"]),
+        ):
+            value = find_csv_value(row, headers)
+            if value is not None:
+                transaction[output_key] = value
+        transactions.append(transaction)
 
     return transactions

@@ -43,7 +43,7 @@ def test_create_transactions_uses_review_service(monkeypatch) -> None:
         assert transactions == [
             {
                 "date": "2026-03-01",
-                "amount": -12.5,
+                "amount": Decimal("-12.50"),
                 "merchant": "Starbucks",
                 "category": "Coffee",
             }

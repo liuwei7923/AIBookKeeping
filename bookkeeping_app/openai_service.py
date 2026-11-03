@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
@@ -14,6 +15,12 @@ from bookkeeping_app.parsers import parse_category_review
 from bookkeeping_app.prompts import CATEGORY_REVIEW_PROMPT
 
 logger = logging.getLogger("bookkeeping_app")
+
+
+def _json_default(value: Any) -> str:
+    if isinstance(value, Decimal):
+        return str(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def get_openai_client() -> OpenAI:
@@ -61,6 +68,10 @@ def build_category_review_input(
                 "date": transaction.get("date"),
                 "amount": transaction.get("amount"),
                 "merchant": transaction.get("merchant"),
+                "statement": transaction.get("statement")
+                or transaction.get("description"),
+                "description": transaction.get("description")
+                or transaction.get("statement"),
                 "original_category": transaction.get("category"),
             }
             for transaction in transactions
@@ -74,7 +85,7 @@ def build_category_review_input(
 
     return (
         "Review these transactions and suggest corrected categories when needed.\n\n"
-        f"{json.dumps(payload)}"
+        f"{json.dumps(payload, default=_json_default)}"
     )
 
 

@@ -38,10 +38,11 @@ def _identity_quality(
 def _build_fingerprint(
     *,
     date: str | None,
-    normalized_merchant: str,
+    normalized_merchant: str | None,
+    normalized_statement: str | None,
     amount: Decimal | None,
 ) -> str:
-    fingerprint_input = f"{date}|{normalized_merchant}|{amount}"
+    fingerprint_input = f"{date}|{normalized_merchant}|{normalized_statement}|{amount}"
     return f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
 
 
@@ -57,21 +58,25 @@ def build_canonical_transactions(
         amount = row.get("amount")
         decimal_amount = Decimal(str(amount)) if amount is not None else None
         merchant = row.get("merchant")
+        description = row.get("description") or row.get("statement") or merchant
         source = SourceTransaction(
             user_id=user_id,
             date=row.get("date"),
+            post_date=row.get("post_date") or row.get("posted_date"),
             merchant=merchant,
-            # Bridge until #54 (drop the separate statement field) is
-            # decided: keep statement in sync with merchant so existing
-            # downstream readers (e.g. the categorization-memory route)
-            # don't silently see a null value.
-            statement=merchant,
+            description=description,
+            statement=description,
             amount=decimal_amount,
-            original_category=row.get("category"),
+            original_category=row.get("category") or row.get("original_category"),
+            transaction_type=row.get("type") or row.get("transaction_type"),
+            memo=row.get("memo"),
         )
         normalized_merchant = normalize_merchant(source.merchant)
+        normalized_statement = normalize_merchant(
+            source.statement or source.description
+        )
 
-        if not normalized_merchant:
+        if not normalized_merchant and not normalized_statement:
             incomplete_sources.append(source)
             continue
 
@@ -79,7 +84,7 @@ def build_canonical_transactions(
             CanonicalTransaction(
                 source=source,
                 normalized_merchant=normalized_merchant,
-                normalized_statement=normalized_merchant,
+                normalized_statement=normalized_statement or normalized_merchant,
                 direction=(
                     TransactionDirection.CREDIT
                     if amount is not None and amount >= 0
@@ -92,6 +97,7 @@ def build_canonical_transactions(
                 fingerprint=_build_fingerprint(
                     date=source.date,
                     normalized_merchant=normalized_merchant,
+                    normalized_statement=normalized_statement,
                     amount=decimal_amount,
                 ),
             )
