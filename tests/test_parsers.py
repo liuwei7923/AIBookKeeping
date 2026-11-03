@@ -48,6 +48,16 @@ def test_parse_csv_transactions_treats_statement_column_as_merchant() -> None:
     ]
 
 
+def test_parse_preserves_statement_when_merchant_is_present() -> None:
+    row = parse_csv_transactions(
+        "date,merchant,original statement,amount,category\n"
+        "2026-03-02,Whole Foods,WHOLEFDS SAN JOSE,-42.19,Groceries\n"
+    )[0]
+
+    assert row["merchant"] == "Whole Foods"
+    assert row["description"] == "WHOLEFDS SAN JOSE"
+
+
 def test_parse_csv_transactions_supports_credit_card_export_headers() -> None:
     csv_text = (
         "Date of Transaction,Merchant Name or Transaction Description,$ Amount\n"
@@ -67,8 +77,12 @@ def test_parse_csv_transactions_supports_credit_card_export_headers() -> None:
     ]
 
 
-def test_synthetic_chase_csv_preserves_optional_source_fields_and_decimal_amount() -> None:
-    csv_text = (Path(__file__).parent / "sample_csvs" / "synthetic_chase.csv").read_text()
+def test_synthetic_chase_csv_preserves_optional_source_fields_and_decimal_amount() -> (
+    None
+):
+    csv_text = (
+        Path(__file__).parent / "sample_csvs" / "synthetic_chase.csv"
+    ).read_text()
     transaction = parse_csv_transactions(csv_text)[0]
 
     assert transaction == {
@@ -85,14 +99,27 @@ def test_synthetic_chase_csv_preserves_optional_source_fields_and_decimal_amount
 
 def test_decimal_amount_is_serialized_without_float_rounding_for_model_input() -> None:
     result = build_category_review_input(
-        [{"date": "2026-03-02", "amount": Decimal("0.1000000000000000001"), "merchant": "Cafe", "category": None}]
+        [
+            {
+                "date": "2026-03-02",
+                "amount": Decimal("0.1000000000000000001"),
+                "merchant": "Cafe",
+                "category": None,
+            }
+        ]
     )
     assert '"amount": "0.1000000000000000001"' in result
 
 
 def test_category_review_input_keeps_description_separate_from_merchant() -> None:
     result = build_category_review_input(
-        [{"merchant": None, "description": "POS MARKET #12", "amount": Decimal("-1.20")}]
+        [
+            {
+                "merchant": None,
+                "description": "POS MARKET #12",
+                "amount": Decimal("-1.20"),
+            }
+        ]
     )
     assert '"merchant": null' in result
     assert '"source_description": "POS MARKET #12"' in result

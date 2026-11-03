@@ -80,6 +80,30 @@ def test_create_transactions_uses_review_service(monkeypatch) -> None:
     assert response.json()[0]["suggested_category"] == "Coffee"
 
 
+def test_transaction_response_serializes_decimal_review_amount(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    response_text = '[{"date":"2026-03-01","amount":-12.5,"merchant":"Cafe","original_category":"Coffee","suggested_category":"Coffee","reason":"Matches"}]'
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(output_text=response_text)
+        )
+    )
+    monkeypatch.setattr(
+        "bookkeeping_app.openai_service.get_openai_client", lambda: fake_client
+    )
+
+    response = client.post(
+        "/transactions",
+        files={
+            "file": ("transactions.csv", b"merchant,amount\nCafe,-12.50\n", "text/csv")
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["amount"] == -12.5
+
+
 def test_explicit_request_user_overrides_the_client_default(monkeypatch) -> None:
     jia_user_id = "0c050ed3-d41b-468c-9c29-e9e6da905c04"
     monkeypatch.setattr(

@@ -57,16 +57,38 @@ class FileMerchantStore:
         # writers in separate processes; see module/class contract.
         self._lock = _lock_for(path)
 
-    def confirm(self, user_id: UUID, source_description: str, merchant: str, *, correction: bool = False, allow_conflict: bool = True) -> MerchantConfirmation:
+    def confirm(
+        self,
+        user_id: UUID,
+        source_description: str,
+        merchant: str,
+        *,
+        correction: bool = False,
+        allow_conflict: bool = True,
+    ) -> MerchantConfirmation:
         description, confirmed = source_description.strip(), merchant.strip()
         key = normalize_merchant(description)
         if not key or not confirmed:
-            raise ValueError("source description and confirmed merchant must not be blank")
+            raise ValueError(
+                "source description and confirmed merchant must not be blank"
+            )
         with self._lock, self._file_lock(exclusive=True):
             records = self._load()
-            current = [r for r in records if r.user_id == user_id and normalize_merchant(r.source_description) == key and r.active]
-            if not correction and any(r.confirmed_merchant.casefold() == confirmed.casefold() for r in current):
-                return next(r for r in current if r.confirmed_merchant.casefold() == confirmed.casefold())
+            current = [
+                r
+                for r in records
+                if r.user_id == user_id
+                and normalize_merchant(r.source_description) == key
+                and r.active
+            ]
+            if not correction and any(
+                r.confirmed_merchant.casefold() == confirmed.casefold() for r in current
+            ):
+                return next(
+                    r
+                    for r in current
+                    if r.confirmed_merchant.casefold() == confirmed.casefold()
+                )
             if current and not correction and not allow_conflict:
                 raise ValueError("conflicting mapping requires explicit correction")
             if correction:
@@ -78,7 +100,12 @@ class FileMerchantStore:
                     else r
                     for r in records
                 ]
-            record = MerchantConfirmation(user_id=user_id, source_description=description, confirmed_merchant=confirmed, action="correction" if correction else "confirmation")
+            record = MerchantConfirmation(
+                user_id=user_id,
+                source_description=description,
+                confirmed_merchant=confirmed,
+                action="correction" if correction else "confirmation",
+            )
             records.append(record)
             self._save(records)
             return record
@@ -88,13 +115,21 @@ class FileMerchantStore:
         if not key:
             return MerchantLookup(status="not_found")
         with self._lock, self._file_lock(exclusive=False):
-            found = tuple(r for r in self._load() if r.active and r.user_id == user_id and normalize_merchant(r.source_description) == key)
+            found = tuple(
+                r
+                for r in self._load()
+                if r.active
+                and r.user_id == user_id
+                and normalize_merchant(r.source_description) == key
+            )
         names = {r.confirmed_merchant.casefold() for r in found}
         if not found:
             return MerchantLookup(status="not_found")
         if len(names) > 1:
             return MerchantLookup(status="ambiguous", evidence=found)
-        return MerchantLookup(status="matched", merchant=found[0].confirmed_merchant, evidence=found)
+        return MerchantLookup(
+            status="matched", merchant=found[0].confirmed_merchant, evidence=found
+        )
 
     def history(self, user_id: UUID) -> tuple[MerchantConfirmation, ...]:
         with self._lock, self._file_lock(exclusive=False):
@@ -125,10 +160,14 @@ class FileMerchantStore:
 
     def _save(self, records: list[MerchantConfirmation]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        fd, name = tempfile.mkstemp(dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp")
+        fd, name = tempfile.mkstemp(
+            dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp"
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                json.dump([r.model_dump(mode="json") for r in records], stream, indent=2)
+                json.dump(
+                    [r.model_dump(mode="json") for r in records], stream, indent=2
+                )
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(name, self._path)

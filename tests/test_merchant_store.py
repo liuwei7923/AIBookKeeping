@@ -10,7 +10,10 @@ def test_confirmation_exact_normalized_lookup_and_shared_store_isolation(tmp_pat
     path = tmp_path / "merchants.json"
     store = FileMerchantStore(path)
     store.confirm(USER_A, "CHASE COFFEE #42", "Northstar Cafe")
-    assert FileMerchantStore(path).lookup(USER_A, " chase   coffee #42 ").merchant == "Northstar Cafe"
+    assert (
+        FileMerchantStore(path).lookup(USER_A, " chase   coffee #42 ").merchant
+        == "Northstar Cafe"
+    )
     assert store.lookup(USER_B, "CHASE COFFEE #42").status == "not_found"
 
 

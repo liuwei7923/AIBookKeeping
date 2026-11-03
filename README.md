@@ -516,3 +516,10 @@ The current implementation does not yet include:
 # Merchant confirmation storage
 
 Transaction descriptions from statement imports remain source data, not user-confirmed merchant identities. `FileMerchantStore` stores explicit, user-scoped confirmations and performs exact lookup after normalizing case, punctuation, and whitespace. Conflicting confirmations are retained and lookup reports ambiguity. Explicit correction deactivates prior evidence while retaining history. Per-path in-process locks coordinate instances in one process; advisory `fcntl` locks additionally coordinate file operations across processes on macOS/Linux. Platforms without `fcntl` require a single writer; network-filesystem locking semantics are not guaranteed. This seam is deterministic and does not invoke a model or provide review UI. Synthetic Chase-shaped parser coverage lives in `tests/sample_csvs/synthetic_chase.csv`.
+
+Existing categorization-memory fingerprints are not migrated by this change.
+Because CSV amounts now retain decimal precision instead of first becoming
+floats, their textual representation in a newly calculated fingerprint can
+differ from older records (for example, `-12.50` versus `-12.5`). Duplicate
+detection across those versions needs a migration or compatibility strategy
+before deploying this change against existing memory data.

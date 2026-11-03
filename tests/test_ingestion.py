@@ -1,6 +1,8 @@
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
+
 from bookkeeping_app.domain_contracts import (
     MerchantIdentificationStatus,
     TransactionDirection,
@@ -187,7 +189,9 @@ def test_description_only_is_preserved_without_becoming_merchant() -> None:
         "Transaction Date,Post Date,Description,Type,Amount,Memo\n"
         "03/02/2026,03/03/2026,POS MARKET #12,Sale,-1.20,synthetic\n"
     )[0]
-    canonical = build_canonical_transactions([row], user_id=USER_ID).canonical_transactions[0]
+    canonical = build_canonical_transactions(
+        [row], user_id=USER_ID
+    ).canonical_transactions[0]
     assert canonical.source.source_description == "POS MARKET #12"
     assert canonical.source.merchant is None
     assert canonical.normalized_merchant is None
@@ -199,15 +203,56 @@ def test_description_only_is_preserved_without_becoming_merchant() -> None:
 
 def test_explicit_merchant_and_confirmation_have_distinct_semantics() -> None:
     source_provided = build_canonical_transactions(
-        [{"merchant": "Acme", "description": "POS ACME 1", "amount": -2}], user_id=USER_ID
+        [{"merchant": "Acme", "description": "POS ACME 1", "amount": -2}],
+        user_id=USER_ID,
     ).canonical_transactions[0]
-    confirmed = build_canonical_transactions(
-        [{"description": "POS ACME 1", "confirmed_merchant": "Acme", "amount": -2}], user_id=USER_ID
+    assert (
+        source_provided.source.merchant_status
+        is MerchantIdentificationStatus.SOURCE_PROVIDED
+    )
+    with pytest.raises(ValueError, match="confirmed_merchant"):
+        build_canonical_transactions(
+            [{"description": "POS ACME 1", "confirmed_merchant": "Acme", "amount": -2}],
+            user_id=USER_ID,
+        )
+
+
+def test_source_statement_is_preserved_separately_from_merchant() -> None:
+    canonical = build_canonical_transactions(
+        [{"merchant": "Acme", "description": "POS ACME 1", "amount": -2}],
+        user_id=USER_ID,
     ).canonical_transactions[0]
-    assert source_provided.source.merchant_status is MerchantIdentificationStatus.SOURCE_PROVIDED
-    assert confirmed.source.merchant is None
-    assert confirmed.source.confirmed_merchant == "Acme"
-    assert confirmed.source.merchant_status is MerchantIdentificationStatus.USER_CONFIRMED
+
+    assert canonical.source.statement == "POS ACME 1"
+    assert canonical.source.merchant == "Acme"
+
+
+def test_fingerprint_uses_source_not_reviewed_merchant() -> None:
+    source = {"description": "POS ACME 1", "amount": -2, "date": "2026-03-01"}
+    transaction = build_canonical_transactions(
+        [source], user_id=USER_ID
+    ).canonical_transactions[0]
+    # Applying a review changes derived state, not the source identity.
+    reviewed = transaction.model_copy(update={"normalized_merchant": "acme"})
+    assert reviewed.fingerprint == transaction.fingerprint
+    assert (
+        build_canonical_transactions([source], user_id=USER_ID)
+        .canonical_transactions[0]
+        .fingerprint
+        == reviewed.fingerprint
+    )
+
+
+def test_merchant_only_fingerprint_retains_existing_formula() -> None:
+    from hashlib import sha256
+
+    row = {"merchant": "Acme", "amount": -2.0, "date": "2026-03-01"}
+    transaction = build_canonical_transactions(
+        [row], user_id=USER_ID
+    ).canonical_transactions[0]
+    legacy_fingerprint = sha256(b"2026-03-01|acme|-2.0").hexdigest()
+
+    assert transaction.fingerprint == f"sha256:{legacy_fingerprint}"
 
 
 def test_merchant_only_row_does_not_claim_source_description() -> None:

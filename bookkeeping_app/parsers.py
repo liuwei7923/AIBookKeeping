@@ -87,26 +87,31 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
 
         description = find_csv_value(
             row,
-            ["description", "transaction description", "merchant name or transaction description"],
+            [
+                "description",
+                "transaction description",
+                "merchant name or transaction description",
+            ],
         )
-        explicit_merchant = find_csv_value(row, ["merchant", "merchant name", "payee", "name"])
-        # Preserve the legacy merchant alias only for legacy `statement`
-        # headers; transaction descriptions are source data, not a merchant.
-        if description is None and explicit_merchant is None:
+        explicit_merchant = find_csv_value(
+            row, ["merchant", "merchant name", "payee", "name"]
+        )
+        # Statement text is source data even when a merchant is also present.
+        if description is None:
             description = find_csv_value(row, ["statement", "original statement"])
         transaction = {
-                "date": find_csv_value(
-                    row,
-                    ["date", "transaction date", "posted date", "date of transaction"],
-                ),
-                "amount": normalize_amount(
-                    find_csv_value(
-                        row, ["amount", "transaction amount", "value", "$ amount"]
-                    )
-                ),
-                "merchant": explicit_merchant,
-                "category": find_csv_value(row, ["category"]),
-            }
+            "date": find_csv_value(
+                row,
+                ["date", "transaction date", "posted date", "date of transaction"],
+            ),
+            "amount": normalize_amount(
+                find_csv_value(
+                    row, ["amount", "transaction amount", "value", "$ amount"]
+                )
+            ),
+            "merchant": explicit_merchant,
+            "category": find_csv_value(row, ["category"]),
+        }
         if description is not None:
             transaction["description"] = description
         # Keep the established four-key output for existing CSVs. Optional
