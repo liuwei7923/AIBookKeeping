@@ -42,7 +42,15 @@ def _build_fingerprint(
     normalized_merchant: str,
     amount: Decimal | None,
 ) -> str:
-    fingerprint_input = f"{date}|{normalized_merchant}|{amount}"
+    if amount is None:
+        amount_key = "None"
+    elif amount.is_zero():
+        amount_key = "0"
+    else:
+        amount_key = format(amount, "f")
+        if "." in amount_key:
+            amount_key = amount_key.rstrip("0").rstrip(".")
+    fingerprint_input = f"{date}|{normalized_merchant}|{amount_key}"
     return f"sha256:{sha256(fingerprint_input.encode()).hexdigest()}"
 
 

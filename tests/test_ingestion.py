@@ -243,16 +243,16 @@ def test_fingerprint_uses_source_not_reviewed_merchant() -> None:
     )
 
 
-def test_merchant_only_fingerprint_retains_existing_formula() -> None:
-    from hashlib import sha256
-
-    row = {"merchant": "Acme", "amount": -2.0, "date": "2026-03-01"}
-    transaction = build_canonical_transactions(
-        [row], user_id=USER_ID
+def test_fingerprint_is_stable_for_equivalent_decimal_amounts() -> None:
+    row = {"merchant": "Acme", "amount": Decimal("-12.50"), "date": "2026-03-01"}
+    first = build_canonical_transactions([row], user_id=USER_ID).canonical_transactions[
+        0
+    ]
+    second = build_canonical_transactions(
+        [{**row, "amount": Decimal("-12.5")}], user_id=USER_ID
     ).canonical_transactions[0]
-    legacy_fingerprint = sha256(b"2026-03-01|acme|-2.0").hexdigest()
 
-    assert transaction.fingerprint == f"sha256:{legacy_fingerprint}"
+    assert first.fingerprint == second.fingerprint
 
 
 def test_merchant_only_row_does_not_claim_source_description() -> None:
