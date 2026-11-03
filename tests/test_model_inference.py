@@ -172,7 +172,10 @@ def test_openai_adapter_uses_real_sdk_with_mock_transport(monkeypatch):
             api_key="synthetic-test-key", http_client=http_client, max_retries=0
         )
         adapter = OpenAIModelClient(
-            model="gpt-4.1-mini", operation="merchant_review", client=sdk
+            model="gpt-4.1-mini",
+            operation="merchant_review",
+            client=sdk,
+            max_output_tokens=8192,
         )
         schema = {"type": "object", "properties": {}, "additionalProperties": False}
         assert (
@@ -263,3 +266,5 @@ def test_per_stage_model_selection(monkeypatch):
         "beam-test",
         "category-test",
     ]
+    assert requests[0]["max_completion_tokens"] == 8192
+    assert "max_output_tokens" not in requests[1]

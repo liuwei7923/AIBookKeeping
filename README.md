@@ -84,8 +84,10 @@ adapter, pointing at `BEAM_BASE_URL` — no third-party endpoint is hard-coded.
 It requests strict structured output and validates results independently. Each
 merchant request contains at most 25 transactions (a smaller batch size can be
 passed), excludes user IDs, and includes source text rather than trusted labels.
-The adapters use a 60-second timeout, an 8192-token output limit, no automatic
-retries or model fallback, and `store=False`. OpenAI and Beam request attempts
+The merchant adapter uses a 60-second timeout and a bounded 8192-token output
+limit; category review uses the provider default output cap until batching
+lands in #63/#70. Both have no automatic retries or model fallback and request
+`store=False`. OpenAI and Beam request attempts
 are counted separately in the admin API; its `model` field names the OpenAI
 category model, not Beam. Provider retention policies still apply;
 `store=False` is not a promise of zero retention.

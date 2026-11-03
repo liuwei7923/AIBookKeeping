@@ -41,7 +41,9 @@ def get_review_client(
     OpenAI.
     """
     if stage == "merchant":
-        return BeamModelClient(model=BEAM_MODEL_NAME, operation="merchant_review")
+        return BeamModelClient(
+            model=BEAM_MODEL_NAME, operation="merchant_review", max_output_tokens=8192
+        )
     if stage == "category":
         return OpenAIModelClient(
             model=MODEL_NAME,
@@ -61,9 +63,13 @@ class _ModelClientBase:
         operation: str,
         client: OpenAI | None = None,
         timeout: float = 60,
-        max_output_tokens: int = 8192,
+        max_output_tokens: int | None = None,
     ) -> None:
-        if not model.strip() or timeout <= 0 or max_output_tokens <= 0:
+        if (
+            not model.strip()
+            or timeout <= 0
+            or (max_output_tokens is not None and max_output_tokens <= 0)
+        ):
             raise ValueError("model, positive timeout and output limit are required")
         self._model = model
         self._operation = operation
@@ -133,9 +139,10 @@ class OpenAIModelClient(_ModelClientBase):
                 {"role": "user", "content": user_input},
             ],
             "timeout": self._timeout,
-            "max_output_tokens": self._max_output_tokens,
             "store": False,
         }
+        if self._max_output_tokens is not None:
+            request["max_output_tokens"] = self._max_output_tokens
         if output_schema is not None:
             request["text"] = {
                 "format": {
@@ -185,9 +192,10 @@ class BeamModelClient(_ModelClientBase):
                 {"role": "user", "content": user_input},
             ],
             "timeout": self._timeout,
-            "max_completion_tokens": self._max_output_tokens,
             "store": False,
         }
+        if self._max_output_tokens is not None:
+            request["max_completion_tokens"] = self._max_output_tokens
         if output_schema is not None:
             request["response_format"] = {
                 "type": "json_schema",
