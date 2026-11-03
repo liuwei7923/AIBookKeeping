@@ -13,20 +13,33 @@ if not logger.handlers:
 class UsageMetrics:
     def __init__(self) -> None:
         self.openai_request_count = 0
+        self.beam_request_count = 0
 
-    def record_openai_request(self, endpoint_name: str) -> None:
+    def record_beam_request(self, endpoint_name: str, model: str) -> None:
+        self.beam_request_count += 1
+        logger.info(
+            "Beam request count=%s endpoint=%s model=%s",
+            self.beam_request_count,
+            endpoint_name,
+            model,
+        )
+
+    def record_openai_request(
+        self, endpoint_name: str, model: str = MODEL_NAME
+    ) -> None:
         self.openai_request_count += 1
         logger.info(
             "OpenAI request count=%s endpoint=%s model=%s",
             self.openai_request_count,
             endpoint_name,
-            MODEL_NAME,
+            model,
         )
 
     def snapshot(self) -> dict[str, int | str]:
         return {
             "model": MODEL_NAME,
             "openai_request_count": self.openai_request_count,
+            "beam_request_count": self.beam_request_count,
         }
 
 

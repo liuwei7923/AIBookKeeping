@@ -57,6 +57,58 @@ See [CONTEXT.md](CONTEXT.md) for the canonical language.
 
 ## Current Implementation
 
+### Luna inference and merchant-review foundation
+
+`MerchantReviewer` (`review_merchants` in `bookkeeping_app/merchant_reviewer.py`)
+accepts one user's source transactions and returns ordered, untrusted merchant
+suggestions. An unknown merchant is a valid result. It does not save decisions,
+confirm merchants, perform trusted lookup, or expose a review API/UI yet.
+Those responsibilities and the per-stage 50-transaction approval gate belong
+to the upcoming merchant review workflow (#71).
+
+Merchant and existing category inference share the small `ModelClient`
+interface in `bookkeeping_app/model_inference.py`. Configure each stage to use
+OpenAI GPT-6 Luna or Reflection Beam independently:
+
+```env
+OPENAI_API_KEY=your_application_api_key
+BEAM_API_KEY=your_reflection_api_key
+MERCHANT_REVIEW_PROVIDER=openai
+CATEGORY_REVIEW_PROVIDER=openai
+MERCHANT_REVIEW_MODEL=gpt-6-luna
+CATEGORY_REVIEW_MODEL=gpt-6-luna
+BEAM_MODEL=Beam-1.0-501B-A23B
+```
+
+Use an application API key, not credentials from a coding-agent subscription.
+Configuration is read at process startup. The merchant reviewer accepts an
+injected client; `get_review_client("merchant")` supplies the configured adapter.
+It requests strict structured output and validates results independently. Each
+merchant request contains at most 25 transactions (a smaller batch size can be
+passed), excludes user IDs, and includes source text rather than trusted labels.
+The adapters use a 60-second timeout, an 8192-token output limit, no automatic
+retries or model fallback, and `store=False`. The `beam` provider uses the
+fixed Reflection Chat Completions endpoint and `BEAM_API_KEY`; it does not
+use the OpenCode free model endpoint. Select it per stage by setting the
+corresponding provider to `beam`. OpenAI and Beam request attempts are counted
+separately in the admin API; its `model` field names the configured OpenAI
+category model, not Beam. Provider
+retention policies still apply; `store=False` is not a promise of zero retention.
+
+The common interface also permits a future local adapter without changing the
+reviewers. Jz's structured CategoryReviewer in PR #63 still needs to adopt this
+interface; it is not merged or replaced here.
+
+Tests use fake reviewers and mocked HTTP transport for the real OpenAI SDK:
+
+```bash
+python -m pytest -q tests/test_merchant_reviewer.py tests/test_model_inference.py
+```
+
+No test requires an API key or sends real financial data to a model. Live
+quality evaluation and the complete merchant-confirmation workflow remain
+separate follow-up work.
+
 The repository currently includes:
 
 - FastAPI application and multipart file uploads

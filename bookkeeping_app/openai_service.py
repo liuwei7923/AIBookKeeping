@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import HTTPException
 from openai import APIError, APIStatusError, OpenAI
 
-from bookkeeping_app.config import MAX_CATEGORY_CONTEXT_ITEMS, MODEL_NAME
-from bookkeeping_app.metrics import metrics
+from bookkeeping_app.config import MAX_CATEGORY_CONTEXT_ITEMS
+from bookkeeping_app.model_inference import ModelInferenceError, get_review_client
 from bookkeeping_app.parsers import parse_category_review
 from bookkeeping_app.prompts import CATEGORY_REVIEW_PROMPT
 
@@ -27,14 +27,12 @@ def get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not set")
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, max_retries=0)
 
 
 def raise_openai_http_error(exc: Exception) -> None:
     if isinstance(exc, APIStatusError):
-        logger.error(
-            "OpenAI API status error status=%s message=%s", exc.status_code, str(exc)
-        )
+        logger.error("OpenAI API status error status=%s", exc.status_code)
         if exc.status_code == 429:
             raise HTTPException(
                 status_code=429,
@@ -47,12 +45,12 @@ def raise_openai_http_error(exc: Exception) -> None:
         ) from exc
 
     if isinstance(exc, APIError):
-        logger.error("OpenAI API error message=%s", str(exc))
+        logger.error("OpenAI API error type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=502, detail="OpenAI API request failed"
         ) from exc
 
-    logger.exception("Unexpected error while calling OpenAI")
+    logger.error("Unexpected model error type=%s", type(exc).__name__)
     raise HTTPException(
         status_code=502, detail="Unexpected error while calling OpenAI"
     ) from exc
@@ -100,33 +98,18 @@ def review_transaction_categories(
         return []
 
     try:
-        client = get_openai_client()
-        metrics.record_openai_request("transactions")
-        response = client.responses.create(
-            model=MODEL_NAME,
-            input=[
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": CATEGORY_REVIEW_PROMPT}],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": build_category_review_input(
-                                transactions, category_history
-                            ),
-                        }
-                    ],
-                },
-            ],
+        output_text = get_review_client(
+            "category", openai_client_factory=get_openai_client
+        ).complete(
+            CATEGORY_REVIEW_PROMPT,
+            build_category_review_input(transactions, category_history),
         )
+    except ModelInferenceError as exc:
+        status = 429 if exc.status_code == 429 else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from None
+    except HTTPException:
+        raise
     except Exception as exc:
         raise_openai_http_error(exc)
-
-    output_text = getattr(response, "output_text", "").strip()
-    if not output_text:
-        raise HTTPException(status_code=502, detail="OpenAI returned an empty response")
 
     return parse_category_review(output_text)

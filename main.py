@@ -2,6 +2,6 @@
 
 from dotenv import load_dotenv
 
-from bookkeeping_app.api import app
-
 load_dotenv()
+
+from bookkeeping_app.api import app  # noqa: E402, I001 -- load configuration first
