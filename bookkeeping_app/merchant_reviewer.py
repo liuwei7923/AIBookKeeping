@@ -122,7 +122,7 @@ def _validate_results(
             or not isinstance(body["results"], list)
         ):
             raise ValueError("invalid results envelope")
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return [
             _unknown(item.transaction_id, "Invalid merchant response") for item in chunk
         ]
