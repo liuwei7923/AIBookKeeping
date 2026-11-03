@@ -44,6 +44,14 @@ class TransactionIdentityQuality(StrEnum):
     PARTIAL = "partial"
 
 
+class MerchantIdentificationStatus(StrEnum):
+    UNKNOWN = "unknown"
+    SOURCE_PROVIDED = "source_provided"
+    INFERRED = "inferred"
+    USER_CONFIRMED = "user_confirmed"
+    USER_CORRECTED = "user_corrected"
+
+
 class TrustedCategorizationSource(StrEnum):
     """How a categorization became trusted by the application."""
 
@@ -80,6 +88,12 @@ class SourceTransaction(BaseModel):
     statement: str | None = None
     amount: Decimal | None = None
     original_category: str | None = None
+    post_date: str | None = None
+    transaction_type: str | None = None
+    memo: str | None = None
+    source_description: str | None = None
+    confirmed_merchant: str | None = None
+    merchant_status: MerchantIdentificationStatus = MerchantIdentificationStatus.UNKNOWN
 
 
 class TrustedCategorization(BaseModel):
