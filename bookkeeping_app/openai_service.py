@@ -106,7 +106,15 @@ def review_transaction_categories(
         )
     except ModelInferenceError as exc:
         status = 429 if exc.status_code == 429 else 502
-        raise HTTPException(status_code=status, detail=str(exc)) from None
+        logger.error(
+            "Model inference failed status=%s message=%s", exc.status_code, exc
+        )
+        detail = (
+            "OpenAI quota or rate limit exceeded. Check API billing, project limits, or try again later."
+            if status == 429
+            else "OpenAI API request failed"
+        )
+        raise HTTPException(status_code=status, detail=detail) from None
     except HTTPException:
         raise
     except Exception as exc:
