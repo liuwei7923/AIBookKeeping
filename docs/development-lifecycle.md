@@ -104,6 +104,15 @@ After verification:
 
 The repo, issues, and README should not drift apart.
 
+### 8. Request CodeRabbit review
+
+For every pull request, regardless of author, request a CodeRabbit review by
+commenting `@coderabbitai full review` on the PR. Verify that CodeRabbit
+responds and review its findings; if it is unavailable or rate-limited, report
+that the review is pending rather than treating it as completed. This remains a
+manual step while CodeRabbit requires manual triggers for this repository. AI
+feedback does not replace human review.
+
 ## Testing Policy
 
 ### Unit and API tests

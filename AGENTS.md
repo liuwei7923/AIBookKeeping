@@ -28,6 +28,7 @@ Do not introduce yet:
 - unnecessary OpenAI calls for deterministic tasks
 
 Use `docs/development-lifecycle.md` as the detailed project workflow reference.
+For every pull request, follow its CodeRabbit review step, regardless of author.
 
 ## Agent skills
 
