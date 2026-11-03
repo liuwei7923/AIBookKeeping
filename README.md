@@ -80,7 +80,8 @@ BEAM_MODEL=Beam-1.0-501B-A23B
 Use an application API key, not credentials from a coding-agent subscription.
 Configuration is read at process startup. The merchant reviewer accepts an
 injected client; `get_review_client("merchant")` supplies the configured Beam
-adapter, pointing at `BEAM_BASE_URL` — no third-party endpoint is hard-coded.
+adapter, pointing at `BEAM_BASE_URL` (https only) — no third-party endpoint
+is hard-coded.
 It requests strict structured output and validates results independently. Each
 merchant request contains at most 25 transactions (a smaller batch size can be
 passed), excludes user IDs, and includes source text rather than trusted labels.

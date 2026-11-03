@@ -3,6 +3,7 @@
 import os
 from collections.abc import Callable
 from typing import Any, Literal, Protocol
+from urllib.parse import urlsplit
 
 from openai import APIStatusError, OpenAI, OpenAIError
 
@@ -177,6 +178,8 @@ class BeamModelClient(_ModelClientBase):
             raise ModelInferenceError(
                 "BEAM_API_KEY and BEAM_BASE_URL are not configured"
             )
+        if urlsplit(base_url).scheme != "https":
+            raise ModelInferenceError("BEAM_BASE_URL must use https")
         return OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
 
     def _build_request(
