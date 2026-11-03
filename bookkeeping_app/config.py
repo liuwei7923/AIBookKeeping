@@ -9,10 +9,7 @@ ALLOWED_CSV_CONTENT_TYPES = {
     "application/vnd.ms-excel",
     "application/octet-stream",
 }
-MODEL_NAME = os.getenv("CATEGORY_REVIEW_MODEL", "gpt-6-luna")
-MERCHANT_MODEL_NAME = os.getenv("MERCHANT_REVIEW_MODEL", "gpt-6-luna")
-CATEGORY_REVIEW_PROVIDER = os.getenv("CATEGORY_REVIEW_PROVIDER", "openai")
-MERCHANT_REVIEW_PROVIDER = os.getenv("MERCHANT_REVIEW_PROVIDER", "openai")
+MODEL_NAME = "gpt-4.1-mini"
 BEAM_MODEL_NAME = os.getenv("BEAM_MODEL", "Beam-1.0-501B-A23B")
 DEFAULT_AI_BATCH_SIZE = 25
 MAX_CATEGORY_CONTEXT_ITEMS = 20

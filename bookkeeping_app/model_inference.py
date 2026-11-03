@@ -6,13 +6,7 @@ from typing import Any, Literal, Protocol
 
 from openai import APIStatusError, OpenAI, OpenAIError
 
-from bookkeeping_app.config import (
-    BEAM_MODEL_NAME,
-    CATEGORY_REVIEW_PROVIDER,
-    MERCHANT_MODEL_NAME,
-    MERCHANT_REVIEW_PROVIDER,
-    MODEL_NAME,
-)
+from bookkeeping_app.config import BEAM_MODEL_NAME, MODEL_NAME
 from bookkeeping_app.metrics import metrics
 
 
@@ -41,25 +35,24 @@ def get_review_client(
     *,
     openai_client_factory: Callable[[], OpenAI] | None = None,
 ) -> ModelClient:
-    """Select a stage's configured client without making an inference request."""
-    if stage not in {"merchant", "category"}:
-        raise ValueError("unsupported review stage")
-    provider = (
-        MERCHANT_REVIEW_PROVIDER if stage == "merchant" else CATEGORY_REVIEW_PROVIDER
-    )
-    if provider == "openai":
+    """Select a stage's configured client without making an inference request.
+
+    Merchant review uses the configured Beam endpoint; category review uses
+    OpenAI.
+    """
+    if stage == "merchant":
+        return BeamModelClient(model=BEAM_MODEL_NAME, operation="merchant_review")
+    if stage == "category":
         return OpenAIModelClient(
-            model=MERCHANT_MODEL_NAME if stage == "merchant" else MODEL_NAME,
-            operation=f"{stage}_review",
+            model=MODEL_NAME,
+            operation="category_review",
             client=openai_client_factory() if openai_client_factory else None,
         )
-    if provider == "beam":
-        return BeamModelClient(model=BEAM_MODEL_NAME, operation=f"{stage}_review")
-    raise ValueError("unsupported review provider")
+    raise ValueError("unsupported review stage")
 
 
-class OpenAIModelClient:
-    """Lazy Responses adapter; fakes and future providers implement ModelClient."""
+class _ModelClientBase:
+    """Shared adapter validation and failure translation for the inference boundary."""
 
     def __init__(
         self,
@@ -86,12 +79,53 @@ class OpenAIModelClient:
         output_schema: dict[str, Any] | None = None,
     ) -> str:
         """Request inference without implicit retries or a different-model fallback."""
-        client = self._client
-        if client is None:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise ModelInferenceError("OPENAI_API_KEY is not configured")
-            client = OpenAI(api_key=api_key, max_retries=0)
+        client = self._client if self._client is not None else self._connect()
+        request = self._build_request(system_prompt, user_input, output_schema)
+        try:
+            response = self._send(client, request)
+        except APIStatusError as exc:
+            raise ModelInferenceError(
+                "Model request failed", status_code=exc.status_code
+            ) from None
+        except OpenAIError:
+            raise ModelInferenceError("Model request failed") from None
+        return self._parse_response(response)
+
+    # Provider-specific hooks; each adapter implements these four.
+
+    def _connect(self) -> OpenAI:
+        raise NotImplementedError
+
+    def _build_request(
+        self,
+        system_prompt: str,
+        user_input: str,
+        output_schema: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def _send(self, client: OpenAI, request: dict[str, Any]) -> Any:
+        raise NotImplementedError
+
+    def _parse_response(self, response: Any) -> str:
+        raise NotImplementedError
+
+
+class OpenAIModelClient(_ModelClientBase):
+    """Lazy Responses API adapter; fakes and future providers implement ModelClient."""
+
+    def _connect(self) -> OpenAI:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ModelInferenceError("OPENAI_API_KEY is not configured")
+        return OpenAI(api_key=api_key, max_retries=0)
+
+    def _build_request(
+        self,
+        system_prompt: str,
+        user_input: str,
+        output_schema: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         request: dict[str, Any] = {
             "model": self._model,
             "input": [
@@ -111,15 +145,13 @@ class OpenAIModelClient:
                     "schema": output_schema,
                 }
             }
+        return request
+
+    def _send(self, client: OpenAI, request: dict[str, Any]) -> Any:
         metrics.record_openai_request(self._operation, self._model)
-        try:
-            response = client.responses.create(**request)
-        except APIStatusError as exc:
-            raise ModelInferenceError(
-                "Model request failed", status_code=exc.status_code
-            ) from None
-        except OpenAIError:
-            raise ModelInferenceError("Model request failed") from None
+        return client.responses.create(**request)
+
+    def _parse_response(self, response: Any) -> str:
         text = getattr(response, "output_text", None)
         if not isinstance(text, str) or not text.strip():
             raise ModelInferenceError("Model returned no text")
@@ -128,43 +160,24 @@ class OpenAIModelClient:
         return text
 
 
-class BeamModelClient:
-    """Reflection's Chat Completions API; credentials never leave its fixed endpoint."""
+class BeamModelClient(_ModelClientBase):
+    """OpenAI-compatible Chat Completions adapter for a self-configured endpoint."""
 
-    def __init__(
-        self,
-        *,
-        model: str,
-        operation: str,
-        client: OpenAI | None = None,
-        timeout: float = 60,
-        max_output_tokens: int = 8192,
-    ) -> None:
-        if not model.strip() or timeout <= 0 or max_output_tokens <= 0:
-            raise ValueError("model, positive timeout and output limit are required")
-        self._model = model
-        self._operation = operation
-        self._client = client
-        self._timeout = timeout
-        self._max_output_tokens = max_output_tokens
+    def _connect(self) -> OpenAI:
+        api_key = os.getenv("BEAM_API_KEY")
+        base_url = os.getenv("BEAM_BASE_URL")
+        if not api_key or not base_url:
+            raise ModelInferenceError(
+                "BEAM_API_KEY and BEAM_BASE_URL are not configured"
+            )
+        return OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
 
-    def complete(
+    def _build_request(
         self,
         system_prompt: str,
         user_input: str,
-        *,
-        output_schema: dict[str, Any] | None = None,
-    ) -> str:
-        client = self._client
-        if client is None:
-            api_key = os.getenv("BEAM_API_KEY")
-            if not api_key:
-                raise ModelInferenceError("BEAM_API_KEY is not configured")
-            client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.reflection.ai/openai/v1",
-                max_retries=0,
-            )
+        output_schema: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         request: dict[str, Any] = {
             "model": self._model,
             "messages": [
@@ -184,15 +197,13 @@ class BeamModelClient:
                     "schema": output_schema,
                 },
             }
+        return request
+
+    def _send(self, client: OpenAI, request: dict[str, Any]) -> Any:
         metrics.record_beam_request(self._operation, self._model)
-        try:
-            response = client.chat.completions.create(**request)
-        except APIStatusError as exc:
-            raise ModelInferenceError(
-                "Model request failed", status_code=exc.status_code
-            ) from None
-        except OpenAIError:
-            raise ModelInferenceError("Model request failed") from None
+        return client.chat.completions.create(**request)
+
+    def _parse_response(self, response: Any) -> str:
         choices = getattr(response, "choices", None)
         if not isinstance(choices, list) or len(choices) != 1:
             raise ModelInferenceError("Model returned an invalid response")
