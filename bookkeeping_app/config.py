@@ -19,3 +19,6 @@ CATEGORIZATION_MEMORY_PATH = Path(
         "CATEGORIZATION_MEMORY_PATH", str(DATA_DIR / "categorization_memory.json")
     )
 )
+TRUSTED_MERCHANTS_PATH = Path(
+    os.getenv("TRUSTED_MERCHANTS_PATH", str(DATA_DIR / "trusted_merchants.json"))
+)

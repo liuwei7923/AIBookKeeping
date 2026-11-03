@@ -1,6 +1,7 @@
 """Normalization helpers shared between source and canonical transactions."""
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 MULTISPACE_PATTERN = re.compile(r"\s+")
@@ -16,12 +17,15 @@ def sanitize_text(value: str | None) -> str | None:
     return cleaned or None
 
 
-def normalize_amount(value: Any) -> float | None:
+def normalize_amount(value: Any) -> Decimal | None:
     if value is None:
         return None
 
+    if isinstance(value, Decimal):
+        return value
+
     if isinstance(value, (int, float)):
-        return float(value)
+        return Decimal(str(value))
 
     if not isinstance(value, str):
         return None
@@ -31,8 +35,8 @@ def normalize_amount(value: Any) -> float | None:
         return None
 
     try:
-        return float(cleaned)
-    except ValueError:
+        return Decimal(cleaned)
+    except InvalidOperation, ValueError:
         return None
 
 
