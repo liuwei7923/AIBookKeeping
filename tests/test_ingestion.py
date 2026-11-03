@@ -2,6 +2,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from bookkeeping_app.domain_contracts import (
+    MerchantIdentificationStatus,
     TransactionDirection,
     TransactionIdentityQuality,
 )
@@ -177,3 +178,53 @@ def test_build_canonical_transactions_bridges_statement_from_merchant() -> None:
 
     assert canonical.source.statement == "Whole Foods"
     assert canonical.normalized_statement == "whole foods"
+
+
+def test_description_only_is_preserved_without_becoming_merchant() -> None:
+    from bookkeeping_app.parsers import parse_csv_transactions
+
+    row = parse_csv_transactions(
+        "Transaction Date,Post Date,Description,Type,Amount,Memo\n"
+        "03/02/2026,03/03/2026,POS MARKET #12,Sale,-1.20,synthetic\n"
+    )[0]
+    canonical = build_canonical_transactions([row], user_id=USER_ID).canonical_transactions[0]
+    assert canonical.source.source_description == "POS MARKET #12"
+    assert canonical.source.merchant is None
+    assert canonical.normalized_merchant is None
+    assert canonical.source.merchant_status is MerchantIdentificationStatus.UNKNOWN
+    assert canonical.source.post_date == "03/03/2026"
+    assert canonical.source.transaction_type == "Sale"
+    assert canonical.source.memo == "synthetic"
+
+
+def test_explicit_merchant_and_confirmation_have_distinct_semantics() -> None:
+    source_provided = build_canonical_transactions(
+        [{"merchant": "Acme", "description": "POS ACME 1", "amount": -2}], user_id=USER_ID
+    ).canonical_transactions[0]
+    confirmed = build_canonical_transactions(
+        [{"description": "POS ACME 1", "confirmed_merchant": "Acme", "amount": -2}], user_id=USER_ID
+    ).canonical_transactions[0]
+    assert source_provided.source.merchant_status is MerchantIdentificationStatus.SOURCE_PROVIDED
+    assert confirmed.source.merchant is None
+    assert confirmed.source.confirmed_merchant == "Acme"
+    assert confirmed.source.merchant_status is MerchantIdentificationStatus.USER_CONFIRMED
+
+
+def test_merchant_only_row_does_not_claim_source_description() -> None:
+    canonical = build_canonical_transactions(
+        [{"merchant": "Acme", "amount": -2}], user_id=USER_ID
+    ).canonical_transactions[0]
+    assert canonical.source.merchant == "Acme"
+    assert canonical.source.source_description is None
+
+
+def test_description_changes_transaction_fingerprint_when_merchant_missing() -> None:
+    first, second = build_canonical_transactions(
+        [
+            {"description": "POS CAFE ONE", "date": "2026-03-01", "amount": -2},
+            {"description": "POS CAFE TWO", "date": "2026-03-01", "amount": -2},
+        ],
+        user_id=USER_ID,
+    ).canonical_transactions
+    assert first.normalized_merchant is None
+    assert first.fingerprint != second.fingerprint

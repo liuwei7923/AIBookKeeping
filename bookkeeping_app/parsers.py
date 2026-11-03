@@ -85,8 +85,16 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
         if not row:
             continue
 
-        transactions.append(
-            {
+        description = find_csv_value(
+            row,
+            ["description", "transaction description", "merchant name or transaction description"],
+        )
+        explicit_merchant = find_csv_value(row, ["merchant", "merchant name", "payee", "name"])
+        # Preserve the legacy merchant alias only for legacy `statement`
+        # headers; transaction descriptions are source data, not a merchant.
+        if description is None and explicit_merchant is None:
+            description = find_csv_value(row, ["statement", "original statement"])
+        transaction = {
                 "date": find_csv_value(
                     row,
                     ["date", "transaction date", "posted date", "date of transaction"],
@@ -96,20 +104,21 @@ def parse_csv_transactions(csv_text: str) -> list[dict[str, Any]]:
                         row, ["amount", "transaction amount", "value", "$ amount"]
                     )
                 ),
-                "merchant": find_csv_value(
-                    row,
-                    [
-                        "merchant",
-                        "description",
-                        "payee",
-                        "name",
-                        "original statement",
-                        "statement",
-                        "merchant name or transaction description",
-                    ],
-                ),
+                "merchant": explicit_merchant,
                 "category": find_csv_value(row, ["category"]),
             }
-        )
+        if description is not None:
+            transaction["description"] = description
+        # Keep the established four-key output for existing CSVs. Optional
+        # Chase columns are additive only when actually present.
+        for output_key, headers in (
+            ("post_date", ["post date", "posted date"]),
+            ("type", ["type", "transaction type"]),
+            ("memo", ["memo", "notes"]),
+        ):
+            value = find_csv_value(row, headers)
+            if value is not None:
+                transaction[output_key] = value
+        transactions.append(transaction)
 
     return transactions

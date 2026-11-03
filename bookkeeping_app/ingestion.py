@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from bookkeeping_app.domain_contracts import (
     CanonicalTransaction,
+    MerchantIdentificationStatus,
     SourceTransaction,
     TransactionDirection,
     TransactionIdentityQuality,
@@ -57,6 +58,8 @@ def build_canonical_transactions(
         amount = row.get("amount")
         decimal_amount = Decimal(str(amount)) if amount is not None else None
         merchant = row.get("merchant")
+        description = row.get("source_description") or row.get("description") or row.get("statement")
+        confirmed_merchant = row.get("confirmed_merchant")
         source = SourceTransaction(
             user_id=user_id,
             date=row.get("date"),
@@ -68,10 +71,23 @@ def build_canonical_transactions(
             statement=merchant,
             amount=decimal_amount,
             original_category=row.get("category"),
+            post_date=row.get("post_date"),
+            transaction_type=row.get("type"),
+            memo=row.get("memo"),
+            source_description=description,
+            confirmed_merchant=confirmed_merchant,
+            merchant_status=(
+                MerchantIdentificationStatus.USER_CONFIRMED
+                if confirmed_merchant
+                else MerchantIdentificationStatus.SOURCE_PROVIDED
+                if merchant
+                else MerchantIdentificationStatus.UNKNOWN
+            ),
         )
-        normalized_merchant = normalize_merchant(source.merchant)
+        normalized_merchant = normalize_merchant(source.confirmed_merchant or source.merchant)
+        normalized_description = normalize_merchant(description)
 
-        if not normalized_merchant:
+        if not normalized_merchant and not normalized_description:
             incomplete_sources.append(source)
             continue
 
@@ -79,7 +95,7 @@ def build_canonical_transactions(
             CanonicalTransaction(
                 source=source,
                 normalized_merchant=normalized_merchant,
-                normalized_statement=normalized_merchant,
+                normalized_statement=normalized_description or normalized_merchant,
                 direction=(
                     TransactionDirection.CREDIT
                     if amount is not None and amount >= 0
@@ -91,7 +107,7 @@ def build_canonical_transactions(
                 ),
                 fingerprint=_build_fingerprint(
                     date=source.date,
-                    normalized_merchant=normalized_merchant,
+                    normalized_merchant=normalized_merchant or normalized_description or "",
                     amount=decimal_amount,
                 ),
             )
