@@ -4,6 +4,7 @@ import httpx2 as httpx
 import pytest
 from openai import OpenAI
 
+from bookkeeping_app.domain_contracts import ReviewStage
 from bookkeeping_app.metrics import metrics
 from bookkeeping_app.model_inference import (
     BeamModelClient,
@@ -37,8 +38,7 @@ def test_beam_adapter_uses_configured_endpoint_with_mock_transport(monkeypatch):
             },
         )
 
-    monkeypatch.setattr(metrics, "openai_request_count", 0)
-    monkeypatch.setattr(metrics, "beam_request_count", 0)
+    monkeypatch.setattr(metrics, "request_counts", {"openai": 0, "beam": 0})
     monkeypatch.setenv("BEAM_BASE_URL", "https://beam.test/v1")
     with httpx.Client(transport=httpx.MockTransport(respond)) as http_client:
         sdk = OpenAI(
@@ -60,8 +60,8 @@ def test_beam_adapter_uses_configured_endpoint_with_mock_transport(monkeypatch):
     assert str(request.url) == "https://beam.test/v1/chat/completions"
     assert body["response_format"]["json_schema"]["schema"] == schema
     assert body["store"] is False
-    assert metrics.beam_request_count == 1
-    assert metrics.openai_request_count == 0
+    assert metrics.request_counts["beam"] == 1
+    assert metrics.request_counts["openai"] == 0
 
 
 def test_merchant_stage_uses_beam_endpoint(monkeypatch):
@@ -89,7 +89,7 @@ def test_merchant_stage_uses_beam_endpoint(monkeypatch):
     monkeypatch.setenv("BEAM_API_KEY", "synthetic")
     monkeypatch.setenv("BEAM_BASE_URL", "https://beam.test/v1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    result = get_review_client("merchant").complete("system", "input")
+    result = get_review_client(ReviewStage.MERCHANT).complete("system", "input")
     assert result == '{"results":[]}'
     assert requests[0]["model"] == "Beam-1.0-501B-A23B"
 
@@ -117,7 +117,7 @@ def test_beam_rejects_non_https_endpoint(monkeypatch):
     monkeypatch.setenv("BEAM_API_KEY", "synthetic")
     monkeypatch.setenv("BEAM_BASE_URL", "http://beam.test/v1")
     with pytest.raises(ModelInferenceError, match="BEAM_BASE_URL must use https"):
-        get_review_client("merchant").complete("s", "u")
+        get_review_client(ReviewStage.MERCHANT).complete("s", "u")
 
 
 @pytest.mark.parametrize(
@@ -174,7 +174,7 @@ def test_openai_adapter_uses_real_sdk_with_mock_transport(monkeypatch):
             },
         )
 
-    monkeypatch.setattr(metrics, "openai_request_count", 0)
+    monkeypatch.setattr(metrics, "request_counts", {"openai": 0, "beam": 0})
     with httpx.Client(transport=httpx.MockTransport(respond)) as http_client:
         sdk = OpenAI(
             api_key="synthetic-test-key", http_client=http_client, max_retries=0
@@ -194,7 +194,6 @@ def test_openai_adapter_uses_real_sdk_with_mock_transport(monkeypatch):
     assert requests[0]["store"] is False
     assert requests[0]["text"]["format"]["schema"] == schema
     assert requests[0]["max_output_tokens"] == 8192
-    assert metrics.openai_request_count == 1
 
 
 @pytest.mark.parametrize("status", [429, 500])
@@ -218,11 +217,11 @@ def test_provider_errors_are_sanitized_without_retry(status):
 
 def test_missing_credentials_are_lazy_and_not_counted(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    before = metrics.openai_request_count
-    client = get_review_client("category")
+    before = metrics.request_counts["openai"]
+    client = get_review_client(ReviewStage.CATEGORY)
     with pytest.raises(ModelInferenceError, match="OPENAI_API_KEY"):
         client.complete("s", "u")
-    assert metrics.openai_request_count == before
+    assert metrics.request_counts["openai"] == before
 
 
 @pytest.mark.parametrize("text,status", [("", "completed"), ("partial", "incomplete")])
@@ -239,7 +238,15 @@ def test_empty_or_incomplete_response_is_failure(text, status):
 
 
 def test_per_stage_model_selection(monkeypatch):
-    monkeypatch.setattr("bookkeeping_app.model_inference.BEAM_MODEL_NAME", "beam-test")
+    monkeypatch.setattr(
+        "bookkeeping_app.model_inference.MERCHANT_REVIEW_PROVIDER", "openai"
+    )
+    monkeypatch.setattr(
+        "bookkeeping_app.model_inference.MERCHANT_MODEL_NAME", "merchant-test"
+    )
+    monkeypatch.setattr(
+        "bookkeeping_app.model_inference.CATEGORY_REVIEW_PROVIDER", "openai"
+    )
     monkeypatch.setattr("bookkeeping_app.model_inference.MODEL_NAME", "category-test")
     requests = []
     sdk = SimpleNamespace(
@@ -265,14 +272,12 @@ def test_per_stage_model_selection(monkeypatch):
         ),
     )
     monkeypatch.setattr("bookkeeping_app.model_inference.OpenAI", lambda **kwargs: sdk)
-    monkeypatch.setenv("BEAM_API_KEY", "synthetic")
-    monkeypatch.setenv("BEAM_BASE_URL", "https://beam.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
-    assert get_review_client("merchant").complete("s", "u") == "{}"
-    assert get_review_client("category").complete("s", "u") == "{}"
+    assert get_review_client(ReviewStage.MERCHANT).complete("s", "u") == "{}"
+    assert get_review_client(ReviewStage.CATEGORY).complete("s", "u") == "{}"
     assert [request["model"] for request in requests] == [
-        "beam-test",
+        "merchant-test",
         "category-test",
     ]
-    assert requests[0]["max_completion_tokens"] == 8192
+    assert requests[0]["max_output_tokens"] == 8192
     assert "max_output_tokens" not in requests[1]

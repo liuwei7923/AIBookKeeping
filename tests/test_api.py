@@ -173,7 +173,7 @@ def test_categorization_memory_is_isolated_by_request_user(
 
 
 def test_admin_openai_usage_endpoint() -> None:
-    metrics.openai_request_count = 3
+    metrics.request_counts["openai"] = 3
     response = client.get("/admin/openai-usage")
     assert response.status_code == 200
     assert response.json()["openai_request_count"] == 3

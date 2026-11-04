@@ -60,6 +60,13 @@ class TrustedCategorizationSource(StrEnum):
     CORRECTED_AI_SUGGESTION = "corrected_ai_suggestion"
 
 
+class ReviewStage(StrEnum):
+    """Which reviewer stage an inference client serves."""
+
+    MERCHANT = "merchant"
+    CATEGORY = "category"
+
+
 class User(BaseModel):
     """A person with a stable identity inside the bookkeeping application."""
 

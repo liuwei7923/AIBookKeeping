@@ -12,25 +12,16 @@ if not logger.handlers:
 
 class UsageMetrics:
     def __init__(self) -> None:
-        self.openai_request_count = 0
-        self.beam_request_count = 0
+        self.request_counts = {"openai": 0, "beam": 0}
 
-    def record_beam_request(self, endpoint_name: str, model: str) -> None:
-        self.beam_request_count += 1
+    def record_request(self, provider: str, endpoint_name: str, model: str) -> None:
+        if provider not in self.request_counts:
+            raise ValueError(f"unsupported review provider: {provider}")
+        self.request_counts[provider] += 1
         logger.info(
-            "Beam request count=%s endpoint=%s model=%s",
-            self.beam_request_count,
-            endpoint_name,
-            model,
-        )
-
-    def record_openai_request(
-        self, endpoint_name: str, model: str = MODEL_NAME
-    ) -> None:
-        self.openai_request_count += 1
-        logger.info(
-            "OpenAI request count=%s endpoint=%s model=%s",
-            self.openai_request_count,
+            "%s request count=%s endpoint=%s model=%s",
+            provider.capitalize(),
+            self.request_counts[provider],
             endpoint_name,
             model,
         )
@@ -38,8 +29,8 @@ class UsageMetrics:
     def snapshot(self) -> dict[str, int | str]:
         return {
             "model": MODEL_NAME,
-            "openai_request_count": self.openai_request_count,
-            "beam_request_count": self.beam_request_count,
+            "openai_request_count": self.request_counts["openai"],
+            "beam_request_count": self.request_counts["beam"],
         }
 
 

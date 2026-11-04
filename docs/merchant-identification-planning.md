@@ -20,9 +20,12 @@ window. Trusted context enters the stage before inference as a deterministic
 lookup:
 
 1. Look up the user's Trusted Merchant Identifications (normalized
-   description/fingerprint matching) first. Exact matches resolve with no model
-   call, matching the design goal that high-confidence repeated merchant
-   matches avoid model calls whenever possible.
+   description/fingerprint matching) first. A unique matching Trusted Merchant
+   Identification resolves with no model call; if a description matches
+   merchants ambiguously (multiple active confirmations), it does not bypass
+   inference and goes to review like an unresolved transaction. This matches
+   the design goal that high-confidence repeated merchant matches avoid model
+   calls whenever possible.
 2. Only unresolved transactions go to `MerchantReviewer` (PR #76), which stays
    a pure suggestion engine.
 3. The approval gate and confirmations wrap both outcomes.

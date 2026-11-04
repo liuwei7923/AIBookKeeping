@@ -1,13 +1,22 @@
 """Small inference boundary shared by domain reviewers; no HTTP route concerns."""
 
+import httpx
 import os
 from collections.abc import Callable
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from openai import APIStatusError, OpenAI, OpenAIError
 
-from bookkeeping_app.config import BEAM_MODEL_NAME, MODEL_NAME
+from bookkeeping_app.config import (
+    BEAM_MODEL_NAME,
+    CATEGORY_REVIEW_PROVIDER,
+    MERCHANT_MODEL_NAME,
+    MERCHANT_REVIEW_PROVIDER,
+    MODEL_NAME,
+    OPENAI_BASE_URL,
+)
+from bookkeeping_app.domain_contracts import ReviewStage
 from bookkeeping_app.metrics import metrics
 
 
@@ -32,26 +41,33 @@ class ModelClient(Protocol):
 
 
 def get_review_client(
-    stage: Literal["merchant", "category"],
+    stage: ReviewStage,
     *,
     openai_client_factory: Callable[[], OpenAI] | None = None,
 ) -> ModelClient:
-    """Select a stage's configured client without making an inference request.
-
-    Merchant review uses the configured Beam endpoint; category review uses
-    OpenAI.
-    """
-    if stage == "merchant":
-        return BeamModelClient(
-            model=BEAM_MODEL_NAME, operation="merchant_review", max_output_tokens=8192
-        )
-    if stage == "category":
+    """Select a stage's configured client without making an inference request."""
+    provider = (
+        MERCHANT_REVIEW_PROVIDER
+        if stage == ReviewStage.MERCHANT
+        else CATEGORY_REVIEW_PROVIDER
+    )
+    model = MERCHANT_MODEL_NAME if stage == ReviewStage.MERCHANT else MODEL_NAME
+    operation = f"{stage.value}_review"
+    max_output_tokens = 8192 if stage == ReviewStage.MERCHANT else None
+    if provider == "openai":
         return OpenAIModelClient(
-            model=MODEL_NAME,
-            operation="category_review",
+            model=model,
+            operation=operation,
             client=openai_client_factory() if openai_client_factory else None,
+            max_output_tokens=max_output_tokens,
         )
-    raise ValueError("unsupported review stage")
+    if provider == "beam":
+        return BeamModelClient(
+            model=BEAM_MODEL_NAME,
+            operation=operation,
+            max_output_tokens=max_output_tokens,
+        )
+    raise ValueError(f"unsupported {stage.value} review provider: {provider}")
 
 
 class _ModelClientBase:
@@ -125,7 +141,12 @@ class OpenAIModelClient(_ModelClientBase):
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ModelInferenceError("OPENAI_API_KEY is not configured")
-        return OpenAI(api_key=api_key, max_retries=0)
+        return OpenAI(
+            api_key=api_key,
+            base_url=OPENAI_BASE_URL,
+            max_retries=0,
+            http_client=httpx.Client(follow_redirects=False),
+        )
 
     def _build_request(
         self,
@@ -156,7 +177,7 @@ class OpenAIModelClient(_ModelClientBase):
         return request
 
     def _send(self, client: OpenAI, request: dict[str, Any]) -> Any:
-        metrics.record_openai_request(self._operation, self._model)
+        metrics.record_request("openai", self._operation, self._model)
         return client.responses.create(**request)
 
     def _parse_response(self, response: Any) -> str:
@@ -180,7 +201,12 @@ class BeamModelClient(_ModelClientBase):
             )
         if urlsplit(base_url).scheme != "https":
             raise ModelInferenceError("BEAM_BASE_URL must use https")
-        return OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
+        return OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=0,
+            http_client=httpx.Client(follow_redirects=False),
+        )
 
     def _build_request(
         self,
@@ -211,7 +237,7 @@ class BeamModelClient(_ModelClientBase):
         return request
 
     def _send(self, client: OpenAI, request: dict[str, Any]) -> Any:
-        metrics.record_beam_request(self._operation, self._model)
+        metrics.record_request("beam", self._operation, self._model)
         return client.chat.completions.create(**request)
 
     def _parse_response(self, response: Any) -> str:
