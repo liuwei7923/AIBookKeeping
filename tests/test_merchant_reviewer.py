@@ -54,6 +54,7 @@ def response(item, **overrides):
     return {
         "transaction_id": str(item.transaction_id),
         "merchant": "Northstar Cafe",
+        "alternatives": None,
         "reason": "Description identifies cafe",
         **overrides,
     }
