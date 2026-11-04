@@ -107,15 +107,14 @@ def test_category_missing_openai_key_reports_configuration_error(monkeypatch):
 
 def test_missing_beam_credentials_does_not_fall_back(monkeypatch):
     monkeypatch.delenv("BEAM_API_KEY", raising=False)
-    monkeypatch.delenv("BEAM_BASE_URL", raising=False)
-    with pytest.raises(ModelInferenceError, match="BEAM_API_KEY and BEAM_BASE_URL"):
+    with pytest.raises(ModelInferenceError, match="BEAM_API_KEY is not configured"):
         BeamModelClient(model="beam", operation="test").complete("s", "u")
 
 
 def test_beam_rejects_non_https_endpoint(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("BEAM_API_KEY", "synthetic")
-    monkeypatch.setenv("BEAM_BASE_URL", "http://beam.test/v1")
+    monkeypatch.setattr("bookkeeping_app.model_inference.BEAM_BASE_URL", "http://beam.test/v1")
     with pytest.raises(ModelInferenceError, match="BEAM_BASE_URL must use https"):
         get_review_client(ReviewStage.MERCHANT).complete("s", "u")
 

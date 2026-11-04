@@ -9,6 +9,7 @@ import httpx2 as httpx
 from openai import APIStatusError, OpenAI, OpenAIError
 
 from bookkeeping_app.config import (
+    BEAM_BASE_URL,
     BEAM_MODEL_NAME,
     MODEL_NAME,
     OPENAI_BASE_URL,
@@ -183,11 +184,9 @@ class BeamModelClient(_ModelClientBase):
 
     def _connect(self) -> OpenAI:
         api_key = os.getenv("BEAM_API_KEY")
-        base_url = os.getenv("BEAM_BASE_URL")
-        if not api_key or not base_url:
-            raise ModelInferenceError(
-                "BEAM_API_KEY and BEAM_BASE_URL are not configured"
-            )
+        if not api_key:
+            raise ModelInferenceError("BEAM_API_KEY is not configured")
+        base_url = BEAM_BASE_URL
         if urlsplit(base_url).scheme != "https":
             raise ModelInferenceError("BEAM_BASE_URL must use https")
         return OpenAI(

@@ -73,7 +73,7 @@ uses the Beam Chat Completions adapter; category review uses OpenAI Responses:
 ```env
 OPENAI_API_KEY=your_application_api_key
 BEAM_API_KEY=your_beam_api_key
-BEAM_BASE_URL=https://your_beam_endpoint/v1
+BEAM_BASE_URL=https://api.reflection.ai/openai/v1
 ```
 
 Use an application API key, not credentials from a coding-agent subscription.
