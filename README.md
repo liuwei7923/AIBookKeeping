@@ -57,6 +57,55 @@ See [CONTEXT.md](CONTEXT.md) for the canonical language.
 
 ## Current Implementation
 
+### Model inference and merchant-review foundation
+
+`MerchantReviewer` (`review_merchants` in `bookkeeping_app/merchant_reviewer.py`)
+accepts one user's source transactions and returns ordered, untrusted merchant
+suggestions. An unknown merchant is a valid result. It does not save decisions,
+confirm merchants, perform trusted lookup, or expose a review API/UI yet.
+Those responsibilities and the per-stage 50-transaction approval gate belong
+to the upcoming merchant review workflow (#71).
+
+Merchant and existing category inference share the small `ModelClient`
+interface in `bookkeeping_app/model_inference.py`. Merchant identification
+uses the Beam Chat Completions adapter; category review uses OpenAI Responses:
+
+```env
+OPENAI_API_KEY=your_application_api_key
+BEAM_API_KEY=your_beam_api_key
+BEAM_BASE_URL=https://api.reflection.ai/openai/v1
+```
+
+Use an application API key, not credentials from a coding-agent subscription.
+Configuration is read at process startup. The merchant reviewer accepts an
+injected client; `get_review_client("merchant")` supplies the configured Beam
+adapter, pointing at `BEAM_BASE_URL` (https only) — no third-party endpoint
+is hard-coded.
+It requests strict structured output and validates results independently. Each
+merchant request contains at most 25 transactions (a smaller batch size can be
+passed), excludes user IDs, and includes source text rather than trusted labels.
+The merchant adapter uses a 60-second timeout and a bounded 8192-token output
+limit; category review uses the provider default output cap until batching
+lands in #63/#70. Both have no automatic retries or model fallback and request
+`store=False`. OpenAI and Beam request attempts
+are counted separately in the admin API; its `model` field names the OpenAI
+category model, not Beam. Provider retention policies still apply;
+`store=False` is not a promise of zero retention.
+
+The common interface also permits other adapters, including a future local
+model, without changing the reviewers. Jz's structured CategoryReviewer in
+PR #63 still needs to adopt this interface; it is not merged or replaced here.
+
+Tests use fake reviewers and mocked HTTP transport for the real OpenAI SDK:
+
+```bash
+python -m pytest -q tests/test_merchant_reviewer.py tests/test_model_inference.py
+```
+
+No test requires an API key or sends real financial data to a model. Live
+quality evaluation and the complete merchant-confirmation workflow remain
+separate follow-up work.
+
 The repository currently includes:
 
 - FastAPI application and multipart file uploads

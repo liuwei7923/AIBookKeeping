@@ -9,7 +9,11 @@ ALLOWED_CSV_CONTENT_TYPES = {
     "application/vnd.ms-excel",
     "application/octet-stream",
 }
-MODEL_NAME = "gpt-4.1-mini"
+MODEL_NAME = os.getenv("CATEGORY_REVIEW_MODEL", "gpt-4.1-mini")
+BEAM_MODEL_NAME = os.getenv("BEAM_MODEL", "Beam-1.0-501B-A23B")
+BEAM_BASE_URL = os.getenv("BEAM_BASE_URL", "https://api.reflection.ai/openai/v1")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+DEFAULT_AI_BATCH_SIZE = 25
 MAX_CATEGORY_CONTEXT_ITEMS = 20
 DEFAULT_MEMORY_CANDIDATE_LIMIT = 5
 DEFAULT_MERCHANT_CONSENSUS_THRESHOLD = 2
