@@ -238,15 +238,7 @@ def test_empty_or_incomplete_response_is_failure(text, status):
 
 
 def test_per_stage_model_selection(monkeypatch):
-    monkeypatch.setattr(
-        "bookkeeping_app.model_inference.MERCHANT_REVIEW_PROVIDER", "openai"
-    )
-    monkeypatch.setattr(
-        "bookkeeping_app.model_inference.MERCHANT_MODEL_NAME", "merchant-test"
-    )
-    monkeypatch.setattr(
-        "bookkeeping_app.model_inference.CATEGORY_REVIEW_PROVIDER", "openai"
-    )
+    monkeypatch.setattr("bookkeeping_app.model_inference.BEAM_MODEL_NAME", "beam-test")
     monkeypatch.setattr("bookkeeping_app.model_inference.MODEL_NAME", "category-test")
     requests = []
     sdk = SimpleNamespace(
@@ -272,12 +264,14 @@ def test_per_stage_model_selection(monkeypatch):
         ),
     )
     monkeypatch.setattr("bookkeeping_app.model_inference.OpenAI", lambda **kwargs: sdk)
+    monkeypatch.setenv("BEAM_API_KEY", "synthetic")
+    monkeypatch.setenv("BEAM_BASE_URL", "https://beam.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
     assert get_review_client(ReviewStage.MERCHANT).complete("s", "u") == "{}"
     assert get_review_client(ReviewStage.CATEGORY).complete("s", "u") == "{}"
     assert [request["model"] for request in requests] == [
-        "merchant-test",
+        "beam-test",
         "category-test",
     ]
-    assert requests[0]["max_output_tokens"] == 8192
+    assert requests[0]["max_completion_tokens"] == 8192
     assert "max_output_tokens" not in requests[1]

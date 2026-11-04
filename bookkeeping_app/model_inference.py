@@ -10,9 +10,6 @@ from openai import APIStatusError, OpenAI, OpenAIError
 
 from bookkeeping_app.config import (
     BEAM_MODEL_NAME,
-    CATEGORY_REVIEW_PROVIDER,
-    MERCHANT_MODEL_NAME,
-    MERCHANT_REVIEW_PROVIDER,
     MODEL_NAME,
     OPENAI_BASE_URL,
 )
@@ -46,28 +43,20 @@ def get_review_client(
     openai_client_factory: Callable[[], OpenAI] | None = None,
 ) -> ModelClient:
     """Select a stage's configured client without making an inference request."""
-    provider = (
-        MERCHANT_REVIEW_PROVIDER
-        if stage == ReviewStage.MERCHANT
-        else CATEGORY_REVIEW_PROVIDER
-    )
-    model = MERCHANT_MODEL_NAME if stage == ReviewStage.MERCHANT else MODEL_NAME
     operation = f"{stage.value}_review"
     max_output_tokens = 8192 if stage == ReviewStage.MERCHANT else None
-    if provider == "openai":
-        return OpenAIModelClient(
-            model=model,
-            operation=operation,
-            client=openai_client_factory() if openai_client_factory else None,
-            max_output_tokens=max_output_tokens,
-        )
-    if provider == "beam":
+    if stage == ReviewStage.MERCHANT:
         return BeamModelClient(
             model=BEAM_MODEL_NAME,
             operation=operation,
             max_output_tokens=max_output_tokens,
         )
-    raise ValueError(f"unsupported {stage.value} review provider: {provider}")
+    return OpenAIModelClient(
+        model=MODEL_NAME,
+        operation=operation,
+        client=openai_client_factory() if openai_client_factory else None,
+        max_output_tokens=max_output_tokens,
+    )
 
 
 class _ModelClientBase:

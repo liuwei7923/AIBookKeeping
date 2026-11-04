@@ -76,9 +76,6 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 BEAM_API_KEY=your_beam_api_key
 BEAM_BASE_URL=https://your_beam_endpoint/v1
 BEAM_MODEL=Beam-1.0-501B-A23B
-MERCHANT_REVIEW_PROVIDER=beam
-MERCHANT_REVIEW_MODEL=gpt-4.1-mini
-CATEGORY_REVIEW_PROVIDER=openai
 CATEGORY_REVIEW_MODEL=gpt-4.1-mini
 ```
 
