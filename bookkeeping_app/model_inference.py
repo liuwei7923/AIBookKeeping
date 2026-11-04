@@ -1,11 +1,11 @@
 """Small inference boundary shared by domain reviewers; no HTTP route concerns."""
 
-import httpx
 import os
 from collections.abc import Callable
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
+import httpx2 as httpx
 from openai import APIStatusError, OpenAI, OpenAIError
 
 from bookkeeping_app.config import (

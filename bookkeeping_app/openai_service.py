@@ -6,14 +6,14 @@ import os
 from decimal import Decimal
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 from fastapi import HTTPException
 from openai import APIError, APIStatusError, OpenAI
 
 from bookkeeping_app.config import MAX_CATEGORY_CONTEXT_ITEMS, OPENAI_BASE_URL
+from bookkeeping_app.domain_contracts import ReviewStage
 from bookkeeping_app.model_inference import ModelInferenceError, get_review_client
 from bookkeeping_app.parsers import parse_category_review
-from bookkeeping_app.domain_contracts import ReviewStage
 from bookkeeping_app.prompts import CATEGORY_REVIEW_PROMPT
 
 logger = logging.getLogger("bookkeeping_app")
