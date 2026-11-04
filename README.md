@@ -72,11 +72,8 @@ uses the Beam Chat Completions adapter; category review uses OpenAI Responses:
 
 ```env
 OPENAI_API_KEY=your_application_api_key
-OPENAI_BASE_URL=https://api.openai.com/v1
 BEAM_API_KEY=your_beam_api_key
 BEAM_BASE_URL=https://your_beam_endpoint/v1
-BEAM_MODEL=Beam-1.0-501B-A23B
-CATEGORY_REVIEW_MODEL=gpt-4.1-mini
 ```
 
 Use an application API key, not credentials from a coding-agent subscription.
