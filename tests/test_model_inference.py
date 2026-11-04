@@ -114,7 +114,9 @@ def test_missing_beam_credentials_does_not_fall_back(monkeypatch):
 def test_beam_rejects_non_https_endpoint(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("BEAM_API_KEY", "synthetic")
-    monkeypatch.setattr("bookkeeping_app.model_inference.BEAM_BASE_URL", "http://beam.test/v1")
+    monkeypatch.setattr(
+        "bookkeeping_app.model_inference.BEAM_BASE_URL", "http://beam.test/v1"
+    )
     with pytest.raises(ModelInferenceError, match="BEAM_BASE_URL must use https"):
         get_review_client(ReviewStage.MERCHANT).complete("s", "u")
 
